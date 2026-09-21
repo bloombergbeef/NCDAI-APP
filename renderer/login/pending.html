@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://fonts.googleapis.com data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com;">
+<title>NCDAI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="login.css" />
+<link rel="stylesheet" href="pending.css" />
+</head>
+<body>
+
+  <div class="titlebar">
+    <div class="titlebar-brand">
+      <span class="titlebar-mark">N</span>
+      <span class="titlebar-name">NCDAI</span>
+    </div>
+    <div class="titlebar-controls">
+      <button id="btn-min" class="tb-btn" aria-label="Свернуть">&#8211;</button>
+      <button id="btn-close" class="tb-btn tb-btn-close" aria-label="Закрыть">&#10005;</button>
+    </div>
+  </div>
+
+  <main class="login-wrap">
+    <div class="login-card pending-card" id="pending-view">
+      <div class="app-badge">N</div>
+      <h1>Заявка отправлена</h1>
+      <p class="lede" id="pending-message">
+        Ваша заявка на регистрацию передана администратору. Пожалуйста, дождитесь
+        одобрения и не закрывайте это окно — как только заявку одобрят, вы
+        автоматически попадёте в рабочее пространство.
+      </p>
+
+      <div class="pending-status" id="pending-status">
+        <canvas id="pending-chart" width="132" height="30"></canvas>
+        <span>Ожидает рассмотрения…</span>
+      </div>
+
+      <div class="pending-rejected" id="pending-rejected" hidden>
+        <p class="error">
+          К сожалению, мы не можем одобрить вашу заявку в соответствии с
+          внутренними критериями отбора компании. Вы можете подать заявку
+          повторно позже или направить дополнительную информацию о себе на
+          <a href="mailto:support@ncdai.com">support@ncdai.com</a> — мы
+          рассмотрим её отдельно.
+        </p>
+        <button class="btn btn-ghost btn-block" id="btn-back-to-login">Вернуться к входу</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="pending.js"></script>
+</body>
+</html>

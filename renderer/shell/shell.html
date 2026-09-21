@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://fonts.googleapis.com data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com;">
+<title>NCDAI</title>
+<link rel="stylesheet" href="shell.css" />
+</head>
+<body>
+
+  <div class="titlebar">
+    <div class="titlebar-brand">
+      <span class="titlebar-mark">N</span>
+      <span class="titlebar-name">NCDAI</span>
+    </div>
+    <div class="titlebar-controls">
+      <button id="btn-logout" class="tb-text-btn">Выйти</button>
+      <button id="btn-min" class="tb-btn" aria-label="Свернуть">&#8211;</button>
+      <button id="btn-close" class="tb-btn tb-btn-close" aria-label="Закрыть">&#10005;</button>
+    </div>
+  </div>
+
+  <div class="update-banner" id="update-banner" hidden>
+    <span class="update-dot"></span>
+    <span id="update-banner-text"></span>
+  </div>
+
+  <div class="webview-wrap">
+    <div class="webview-loading" id="webview-loading">
+      <span class="spinner"></span>
+      <p>Загрузка NCDAI…</p>
+    </div>
+    <webview id="app-webview" src="about:blank" style="width:100%; height:100%; display:none;"></webview>
+  </div>
+
+  <script src="shell.js"></script>
+</body>
+</html>

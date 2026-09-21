@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://fonts.googleapis.com data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com;">
+<title>NCDAI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="login.css" />
+</head>
+<body>
+
+  <div class="titlebar">
+    <div class="titlebar-brand">
+      <span class="titlebar-mark">N</span>
+      <span class="titlebar-name">NCDAI</span>
+    </div>
+    <div class="titlebar-controls">
+      <button id="btn-min" class="tb-btn" aria-label="Свернуть">&#8211;</button>
+      <button id="btn-close" class="tb-btn tb-btn-close" aria-label="Закрыть">&#10005;</button>
+    </div>
+  </div>
+
+  <main class="login-wrap">
+    <form class="login-card" id="login-form">
+      <div class="app-badge">N</div>
+      <h1>Вход в NCDAI</h1>
+      <p class="lede">Введите данные вашей учётной записи</p>
+
+      <label class="field">
+        <span>Логин или email</span>
+        <input type="text" id="email" autocomplete="username" required />
+      </label>
+
+      <label class="field">
+        <span>Пароль</span>
+        <input type="password" id="password" autocomplete="current-password" required />
+      </label>
+
+      <label class="checkbox">
+        <input type="checkbox" id="remember" checked />
+        <span>Запомнить меня на этом устройстве</span>
+      </label>
+
+      <p class="error" id="error-msg"></p>
+
+      <button type="submit" class="btn btn-primary btn-block" id="btn-login">
+        <span class="btn-label">Войти</span>
+        <span class="btn-spinner" hidden></span>
+      </button>
+
+      <p class="switch-link">Нет аккаунта? <a href="#" id="link-to-register">Зарегистрироваться</a></p>
+    </form>
+
+    <form class="login-card register-card" id="register-form" hidden>
+      <div class="app-badge">N</div>
+      <h1>Регистрация в NCDAI</h1>
+      <p class="lede">Заполните данные, чтобы создать аккаунт</p>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Фамилия</span>
+          <input type="text" id="reg-lastname" autocomplete="family-name" required />
+        </label>
+        <label class="field">
+          <span>Имя</span>
+          <input type="text" id="reg-firstname" autocomplete="given-name" required />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Желаемый логин</span>
+        <input type="text" id="reg-username" autocomplete="username" required />
+      </label>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Пароль</span>
+          <input type="password" id="reg-password" autocomplete="new-password" required />
+        </label>
+        <label class="field">
+          <span>Повторите пароль</span>
+          <input type="password" id="reg-password-confirm" autocomplete="new-password" required />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Email</span>
+        <input type="email" id="reg-email" autocomplete="email" required />
+      </label>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Телефон</span>
+          <input type="tel" id="reg-phone" autocomplete="tel" placeholder="+7 900 000-00-00" required />
+        </label>
+        <label class="field">
+          <span>Название компании</span>
+          <input type="text" id="reg-company" autocomplete="organization" required />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Ваш опыт в этой сфере</span>
+        <select id="reg-experience">
+          <option value="" selected disabled>Выберите вариант</option>
+          <option value="none">Только начинаю</option>
+          <option value="junior">Менее 1 года</option>
+          <option value="mid">1–3 года</option>
+          <option value="senior">3–5 лет</option>
+          <option value="expert">Более 5 лет</option>
+        </select>
+      </label>
+
+      <p class="error" id="register-error"></p>
+
+      <button type="submit" class="btn btn-primary btn-block" id="btn-register">
+        <span class="btn-label">Зарегистрироваться</span>
+        <span class="btn-spinner" hidden></span>
+      </button>
+
+      <p class="switch-link">Уже есть аккаунт? <a href="#" id="link-to-login">Войти</a></p>
+    </form>
+  </main>
+
+  <script src="login.js"></script>
+</body>
+</html>

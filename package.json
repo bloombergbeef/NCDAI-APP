@@ -1,0 +1,32 @@
+{
+  "name": "ncdai-app",
+  "productName": "NCDAI",
+  "version": "1.0.0",
+  "description": "NCDAI client — thin Electron shell: login screen + web app view",
+  "main": "main.js",
+  "author": "National Center for Development of Artificial Intelligence LLC",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0"
+  },
+  "build": {
+    "appId": "llc.ncdai.app",
+    "productName": "NCDAI",
+    "asar": true,
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.js", "preload-login.js", "preload-shell.js", "config.js", "lib/**/*", "renderer/**/*", "package.json"],
+    "win": {
+      "target": [{ "target": "zip", "arch": ["x64"] }]
+    },
+    "artifactName": "NCDAI-win-x64.zip"
+  }
+}
