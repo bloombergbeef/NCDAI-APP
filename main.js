@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { spawn } = require('child_process');
 const Store = require('electron-store');
 const config = require('./config');
@@ -61,7 +62,29 @@ function loadShell() {
   win.loadFile(path.join(__dirname, 'renderer', 'shell', 'shell.html'));
 }
 
+/**
+ * Отказываемся запускаться, если рядом с exe нет install-meta.json — этот
+ * файл кладёт только настоящий установщик (installer-logic.js) сразу после
+ * копирования файлов. Без него запуск "напрямую" из скачанной/распакованной
+ * папки, минуя NCDAI-Setup.exe, будет заблокирован — как у любого серьёзного
+ * коммерческого приложения, а не только "portable"-утилиты.
+ */
+function isProperlyInstalled() {
+  if (!app.isPackaged) return true; // в разработке (npm start) проверку не делаем
+  const exeDir = path.dirname(app.getPath('exe'));
+  return fs.existsSync(path.join(exeDir, 'install-meta.json'));
+}
+
 app.whenReady().then(() => {
+  if (!isProperlyInstalled()) {
+    dialog.showErrorBox(
+      'NCDAI',
+      'Пожалуйста, установите NCDAI с помощью NCDAI-Setup.exe.\n\nЗапуск программы без установки не поддерживается.'
+    );
+    app.quit();
+    return;
+  }
+
   installId = resolveInstallId();
   createWindow();
   runStartupTasks();
@@ -226,39 +249,45 @@ async function runComponentInstall(tier) {
 ipcMain.on('window:minimize', () => win?.minimize());
 ipcMain.on('window:close', () => win?.close());
 
-// ---------- Auth (STUB — replace with a real call to config.LOGIN_API_URL) ----------
+// ---------- Auth ----------
 ipcMain.handle('auth:login', async (_evt, { email, password, remember }) => {
-  // TODO: заменить на реальный запрос, например:
-  // const res = await fetch(config.LOGIN_API_URL, { method: 'POST', body: JSON.stringify({ email, password }) });
-  // if (!res.ok) return { ok: false, error: 'Неверный логин или пароль' };
-  // const { token, tier } = await res.json();
-
   if (!email || !password) {
     return { ok: false, error: 'Введите логин и пароль' };
   }
 
-  await new Promise((r) => setTimeout(r, 600)); // имитация сетевой задержки
-  const fakeToken = `stub-token-${Date.now()}`;
-  const tier = 'pro'; // TODO: подставить реальный тариф пользователя из ответа API
+  let data;
+  try {
+    const res = await fetch(`${config.BACKEND_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: email, password }),
+    });
+    data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: data.error || 'Не удалось войти' };
+    }
+  } catch (err) {
+    return { ok: false, error: 'Не удалось связаться с сервером. Проверьте подключение к интернету.' };
+  }
 
   if (remember) {
-    store.set('token', fakeToken);
-    store.set('email', email);
-    store.set('tier', tier);
+    store.set('token', data.token);
+    store.set('email', data.email);
+    store.set('tier', data.tier);
   }
 
   loadShell();
-  sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email });
-  runComponentInstall(tier);
+  sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: data.email });
+  runComponentInstall(data.tier);
   return { ok: true };
 });
 
 ipcMain.handle('auth:get-saved-email', () => store.get('email') || '');
 
 // ---------- Registration ----------
-// В отличие от логина (пока ещё заглушка), регистрация реально ходит на
-// ncdai-backend: создаёт заявку со статусом "pending", после чего окно
-// переключается на экран ожидания и начинает опрашивать её статус.
+// Регистрация ходит на BACKEND_URL/api/auth/register: создаёт заявку со
+// статусом "pending", после чего окно переключается на экран ожидания и
+// начинает опрашивать её статус.
 ipcMain.handle('auth:register', async (_evt, payload) => {
   const { lastName, firstName, username, password, email, phone, company } = payload || {};
   if (!lastName || !firstName || !username || !password || !email || !phone || !company) {
