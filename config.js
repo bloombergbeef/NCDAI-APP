@@ -1,7 +1,7 @@
 // Заглушки — замените на реальные значения перед релизом.
 module.exports = {
   // Адрес бэкенда (ncdai-backend) — телеметрия + проверка обновлений.
-  BACKEND_URL: 'http://localhost:4000',
+  BACKEND_URL: 'https://ncdai-backend-production.up.railway.app',
 
   // Реальный эндпоинт авторизации (логин). Пока не используется — main.js
   // подставляет фейковый успешный ответ вместо запроса сюда (см. ipcMain
