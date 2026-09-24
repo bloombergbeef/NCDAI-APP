@@ -114,10 +114,19 @@ async function runStartupTasks() {
 
   // Если при старте сети не было (или сработал грант уже после старта) — не
   // ждём следующего перезапуска: пока приложение открыто, тихо повторяем
-  // проверку каждые 15 минут. Появилась сеть — компонент подтянется сам.
+  // проверку каждые COMPONENT_CHECK_INTERVAL_MS. Появилась сеть — компонент
+  // подтянется сам. Значение специально небольшое (не 15+ минут) — нагрузка
+  // от такого лёгкого запроса пренебрежимо мала даже при заметном числе
+  // пользователей, а грант в админке подхватывается почти сразу.
+  //
+  // Тем же таймером повторяем heartbeat — без этого last_seen обновлялся бы
+  // только при запуске, и админка ошибочно показывала бы "не в сети" для
+  // человека, который на самом деле часами держит программу открытой.
+  const COMPONENT_CHECK_INTERVAL_MS = 2 * 60 * 1000; // 2 минуты
   setInterval(() => {
+    sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: store.get('email') });
     runComponentInstall(store.get('tier') || 'free');
-  }, 15 * 60 * 1000);
+  }, COMPONENT_CHECK_INTERVAL_MS);
 
   const update = await checkForUpdate({
     backendUrl: config.BACKEND_URL,
