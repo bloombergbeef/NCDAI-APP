@@ -25,7 +25,8 @@
     "directories": { "output": "dist", "buildResources": "build" },
     "files": ["main.js", "preload-login.js", "preload-shell.js", "config.js", "lib/**/*", "renderer/**/*", "package.json"],
     "win": {
-      "target": [{ "target": "zip", "arch": ["x64"] }]
+      "target": [{ "target": "zip", "arch": ["x64"] }],
+      "icon": "build/icon.ico"
     },
     "artifactName": "NCDAI-win-x64.zip"
   }

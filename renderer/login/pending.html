@@ -18,6 +18,10 @@
       <span class="titlebar-name">NCDAI</span>
     </div>
     <div class="titlebar-controls">
+      <span class="ping-indicator" id="ping-indicator" title="Задержка до сервера">
+        <span class="ping-dot" id="ping-dot"></span>
+        <span id="ping-value">—</span>
+      </span>
       <button id="btn-min" class="tb-btn" aria-label="Свернуть">&#8211;</button>
       <button id="btn-close" class="tb-btn tb-btn-close" aria-label="Закрыть">&#10005;</button>
     </div>
@@ -25,7 +29,6 @@
 
   <main class="login-wrap">
     <div class="login-card pending-card" id="pending-view">
-      <div class="app-badge">N</div>
       <h1>Заявка отправлена</h1>
       <p class="lede" id="pending-message">
         Ваша заявка на регистрацию передана администратору. Пожалуйста, дождитесь
@@ -50,6 +53,8 @@
       </div>
     </div>
   </main>
+
+  <footer class="app-footer">National Center for Development of Artificial Intelligence LLC · California, USA</footer>
 
   <script src="pending.js"></script>
 </body>

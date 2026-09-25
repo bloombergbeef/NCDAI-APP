@@ -10,7 +10,13 @@
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-sans); overflow: hidden; }
+html, body {
+  margin: 0; padding: 0; width: 100%; height: 100%;
+  background:
+    linear-gradient(180deg, rgba(10,11,13,0.86), rgba(10,11,13,0.93)),
+    url('../assets/bg-terminal.jpg') center / cover no-repeat;
+  color: var(--text); font-family: var(--font-sans); overflow: hidden;
+}
 
 .titlebar {
   height: 36px; display: flex; align-items: center; justify-content: space-between;
@@ -22,6 +28,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: var(-
 .titlebar-controls { display: flex; align-items: center; -webkit-app-region: no-drag; }
 .tb-text-btn { background: transparent; border: none; color: var(--text-dim); font-family: var(--font-sans); font-size: 12px; padding: 0 14px; height: 36px; cursor: pointer; }
 .tb-text-btn:hover { color: var(--text); }
+
+.ping-indicator { display: flex; align-items: center; gap: 6px; padding: 0 12px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+.ping-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
+.ping-dot.is-green { background: #2ecc71; box-shadow: 0 0 4px #2ecc71; }
+.ping-dot.is-orange { background: #e67e22; box-shadow: 0 0 4px #e67e22; }
+.ping-dot.is-red { background: #e74c3c; box-shadow: 0 0 4px #e74c3c; }
 .tb-btn { width: 44px; height: 36px; background: transparent; border: none; color: var(--text-dim); font-size: 13px; cursor: pointer; }
 .tb-btn:hover { background: var(--panel-2); color: var(--text); }
 .tb-btn-close:hover { background: var(--down); color: #fff; }

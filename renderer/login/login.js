@@ -91,4 +91,18 @@
       regError.textContent = result.error || 'Не удалось зарегистрироваться. Попробуйте ещё раз.';
     }
   });
+
+  // ---------- Ping ----------
+  const pingDot = document.getElementById('ping-dot');
+  const pingValue = document.getElementById('ping-value');
+  window.ncdai.onPingStatus(({ ok, ms }) => {
+    if (!ok) {
+      pingDot.className = 'ping-dot is-red';
+      pingValue.textContent = 'нет связи';
+      return;
+    }
+    const level = ms <= 20 ? 'green' : ms <= 100 ? 'orange' : 'red';
+    pingDot.className = `ping-dot is-${level}`;
+    pingValue.textContent = `${ms} мс`;
+  });
 })();

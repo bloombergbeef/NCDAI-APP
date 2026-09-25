@@ -17,6 +17,10 @@
       <span class="titlebar-name">NCDAI</span>
     </div>
     <div class="titlebar-controls">
+      <span class="ping-indicator" id="ping-indicator" title="Задержка до сервера">
+        <span class="ping-dot" id="ping-dot"></span>
+        <span id="ping-value">—</span>
+      </span>
       <button id="btn-min" class="tb-btn" aria-label="Свернуть">&#8211;</button>
       <button id="btn-close" class="tb-btn tb-btn-close" aria-label="Закрыть">&#10005;</button>
     </div>
@@ -24,7 +28,6 @@
 
   <main class="login-wrap">
     <form class="login-card" id="login-form">
-      <div class="app-badge">N</div>
       <h1>Вход в NCDAI</h1>
       <p class="lede">Введите данные вашей учётной записи</p>
 
@@ -54,7 +57,6 @@
     </form>
 
     <form class="login-card register-card" id="register-form" hidden>
-      <div class="app-badge">N</div>
       <h1>Регистрация в NCDAI</h1>
       <p class="lede">Заполните данные, чтобы создать аккаунт</p>
 
@@ -123,6 +125,8 @@
       <p class="switch-link">Уже есть аккаунт? <a href="#" id="link-to-login">Войти</a></p>
     </form>
   </main>
+
+  <footer class="app-footer">National Center for Development of Artificial Intelligence LLC · California, USA</footer>
 
   <script src="login.js"></script>
 </body>

@@ -18,9 +18,9 @@ let pendingUpdateInstallerPath = null; // set once an "optional" update has fini
 function createWindow() {
   win = new BrowserWindow({
     width: 1040,
-    height: 680,
+    height: 800,
     minWidth: 760,
-    minHeight: 520,
+    minHeight: 600,
     frame: false,
     backgroundColor: '#0a0b0d',
     icon: path.join(__dirname, 'build', 'icon.ico'),
@@ -50,16 +50,19 @@ function createWindow() {
 function loadLogin() {
   win.webContents.session.setPreloads([path.join(__dirname, 'preload-login.js')]);
   win.loadFile(path.join(__dirname, 'renderer', 'login', 'login.html'));
+  startPingLoop();
 }
 
 function loadPending() {
   win.webContents.session.setPreloads([path.join(__dirname, 'preload-login.js')]);
   win.loadFile(path.join(__dirname, 'renderer', 'login', 'pending.html'));
+  startPingLoop();
 }
 
 function loadShell() {
   win.webContents.session.setPreloads([path.join(__dirname, 'preload-shell.js')]);
   win.loadFile(path.join(__dirname, 'renderer', 'shell', 'shell.html'));
+  startPingLoop();
 }
 
 /**
@@ -160,6 +163,31 @@ async function runStartupTasks() {
 
 function notifyUpdateStatus(payload) {
   win?.webContents.send('update:status', payload);
+}
+
+// ---------- Ping indicator ----------
+// Честный замер задержки: время от отправки запроса до ответа сервера на
+// специально лёгкий /api/ping (без обращения к базе — см. server.js), а не
+// на "содержательный" эндпоинт, где к сетевой задержке примешалась бы ещё
+// и работа самого сервера.
+let pingTimer = null;
+
+async function measurePing() {
+  const startedAt = performance.now();
+  try {
+    const res = await fetch(`${config.BACKEND_URL}/api/ping`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) throw new Error('bad status');
+    const ms = Math.round(performance.now() - startedAt);
+    win?.webContents.send('ping:status', { ok: true, ms });
+  } catch (_) {
+    win?.webContents.send('ping:status', { ok: false, ms: null });
+  }
+}
+
+function startPingLoop() {
+  if (pingTimer) return; // уже запущен
+  measurePing();
+  pingTimer = setInterval(measurePing, 5000);
 }
 
 // ---------- Registration approval polling ----------

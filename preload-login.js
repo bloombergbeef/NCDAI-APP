@@ -12,4 +12,9 @@ contextBridge.exposeInMainWorld('ncdai', {
     return () => ipcRenderer.removeListener('registration:status', listener);
   },
   backToLogin: () => ipcRenderer.invoke('auth:back-to-login'),
+  onPingStatus: (callback) => {
+    const listener = (_evt, payload) => callback(payload);
+    ipcRenderer.on('ping:status', listener);
+    return () => ipcRenderer.removeListener('ping:status', listener);
+  },
 });
