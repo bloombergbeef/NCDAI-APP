@@ -6,7 +6,7 @@ const Store = require('electron-store');
 const config = require('./config');
 const { resolveInstallId } = require('./lib/install-id');
 const { sendHeartbeat } = require('./lib/telemetry');
-const { checkForUpdate, downloadToFile } = require('./lib/updater');
+const { checkForUpdate, downloadToFile, verifyChecksum } = require('./lib/updater');
 const { checkComponents } = require('./lib/dependencies');
 
 const store = new Store({ name: 'ncdai-session' });
@@ -96,6 +96,38 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// БЕЗОПАСНОСТЬ: без этого встроенный webview (то, что грузит APP_WEB_URL)
+// мог бы перейти куда угодно — например, если бы сама веб-страница была
+// скомпрометирована и попыталась увести пользователя на поддельный сайт.
+// Разрешаем переходы только в пределах того же домена, что и сам APP_WEB_URL;
+// любые ссылки на другие сайты открываем в обычном браузере пользователя,
+// а не в новом неконтролируемом окне Electron.
+app.on('web-contents-created', (_event, contents) => {
+  if (contents.getType() !== 'webview') return;
+
+  let allowedOrigin;
+  try {
+    allowedOrigin = new URL(config.APP_WEB_URL).origin;
+  } catch (_err) {
+    return; // некорректный APP_WEB_URL в конфиге — не блокируем, но и не проверяем
+  }
+
+  contents.on('will-navigate', (event, url) => {
+    if (new URL(url).origin !== allowedOrigin) event.preventDefault();
+  });
+
+  contents.setWindowOpenHandler(({ url }) => {
+    try {
+      if (new URL(url).origin !== allowedOrigin) {
+        shell.openExternal(url);
+      }
+    } catch (_err) {
+      // некорректный url — просто ничего не открываем
+    }
+    return { action: 'deny' }; // никогда не открываем новое Electron-окно
+  });
+});
+
 // If an optional ("at next restart") update finished downloading while the
 // app was running, apply it right as the user quits — matches what we
 // promised in the admin panel: optional updates land on the next restart.
@@ -113,7 +145,7 @@ async function runStartupTasks() {
   // нет. Гранты выдаются на installId, а не на аккаунт, так что это работает и
   // для акций/промо на анонимных пользователей. Тариф берём из сохранённого
   // логина, если он есть, иначе считаем 'free' — на гранты это не влияет.
-  runComponentInstall(store.get('tier') || 'free');
+  runComponentInstall();
 
   // Если при старте сети не было (или сработал грант уже после старта) — не
   // ждём следующего перезапуска: пока приложение открыто, тихо повторяем
@@ -128,7 +160,7 @@ async function runStartupTasks() {
   const COMPONENT_CHECK_INTERVAL_MS = 2 * 60 * 1000; // 2 минуты
   setInterval(() => {
     sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: store.get('email') });
-    runComponentInstall(store.get('tier') || 'free');
+    runComponentInstall();
   }, COMPONENT_CHECK_INTERVAL_MS);
 
   const update = await checkForUpdate({
@@ -145,6 +177,16 @@ async function runStartupTasks() {
     await downloadToFile(update.downloadUrl, destPath);
   } catch (err) {
     console.warn('[updater] скачивание обновления не удалось:', err.message);
+    notifyUpdateStatus({ state: 'error' });
+    return;
+  }
+
+  // БЕЗОПАСНОСТЬ: не запускаем скачанный установщик, пока не убедимся, что
+  // его реальное содержимое совпадает с тем, что заявил сервер.
+  const checksumOk = await verifyChecksum(destPath, update.sha256);
+  if (!checksumOk) {
+    console.warn('[updater] контрольная сумма обновления не совпала — файл не будет запущен');
+    fs.unlinkSync(destPath);
     notifyUpdateStatus({ state: 'error' });
     return;
   }
@@ -216,7 +258,7 @@ function pollRegistrationStatus(registrationId) {
         store.set('tier', data.tier);
         loadShell();
         sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: data.email });
-        runComponentInstall(data.tier);
+        runComponentInstall();
       } else if (data.status === 'rejected') {
         stopRegistrationPolling();
         store.delete('pendingRegistrationId');
@@ -249,11 +291,14 @@ function runSilently(exePath, args) {
  */
 let componentInstallInFlight = false;
 
-async function runComponentInstall(tier) {
+async function runComponentInstall() {
   if (componentInstallInFlight) return; // предыдущая проверка ещё не закончилась — не дублируем
   componentInstallInFlight = true;
   try {
-    const { components } = await checkComponents({ backendUrl: config.BACKEND_URL, tier, os: 'win32', installId });
+    // Тариф больше не передаём — сервер сам достаёт его из токена (см.
+    // components.js на бэкенде и комментарий в dependencies.js).
+    const token = store.get('token');
+    const { components } = await checkComponents({ backendUrl: config.BACKEND_URL, os: 'win32', installId, token });
     if (!components || components.length === 0) return;
 
     const installedMap = store.get('installedComponents', {});
@@ -265,6 +310,15 @@ async function runComponentInstall(tier) {
       const destPath = path.join(app.getPath('temp'), `${c.name}-${c.version}.exe`);
       try {
         await downloadToFile(c.downloadUrl, destPath);
+
+        // БЕЗОПАСНОСТЬ: как и с обновлениями самой программы — не запускаем
+        // тихо скачанный .exe компонента, пока не сверим его SHA-256.
+        const checksumOk = await verifyChecksum(destPath, c.sha256);
+        if (!checksumOk) {
+          fs.unlinkSync(destPath);
+          throw new Error('контрольная сумма компонента не совпала — установка отменена');
+        }
+
         notifyUpdateStatus({ state: 'installing', version: c.version, label: c.name });
         const args = c.silentArgs ? c.silentArgs.split(' ').filter(Boolean) : [];
         await runSilently(destPath, args);
@@ -315,7 +369,7 @@ ipcMain.handle('auth:login', async (_evt, { email, password, remember }) => {
 
   loadShell();
   sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: data.email });
-  runComponentInstall(data.tier);
+  runComponentInstall();
   return { ok: true };
 });
 
