@@ -1,7 +1,9 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
 const Store = require('electron-store');
 const config = require('./config');
 const { resolveInstallId } = require('./lib/install-id');
@@ -13,6 +15,7 @@ const store = new Store({ name: 'ncdai-session' });
 
 let win = null;
 let installId = null;
+let elevatedTaskName = null; // имя задачи в планировщике для тихой установки компонентов (если включено при установке)
 let pendingUpdateInstallerPath = null; // set once an "optional" update has finished downloading
 
 function createWindow() {
@@ -32,6 +35,11 @@ function createWindow() {
     },
   });
   win.setMenuBarVisibility(false);
+
+  // ВРЕМЕННО, для диагностики: открыть консоль разработчика по F12.
+  win.webContents.on('before-input-event', (_event, input) => {
+    if (input.key === 'F12') win.webContents.toggleDevTools();
+  });
 
   const savedToken = store.get('token');
   const pendingRegId = store.get('pendingRegistrationId');
@@ -78,6 +86,22 @@ function isProperlyInstalled() {
   return fs.existsSync(path.join(exeDir, 'install-meta.json'));
 }
 
+/** Читает install-meta.json и достаёт имя задачи планировщика для тихой
+ *  установки компонентов — если при установке эта опция была включена.
+ *  Без неё (или в режиме разработки) просто возвращает null, и компоненты,
+ *  которым требуются права, по-прежнему ставятся через обычный запрос UAC
+ *  (с реальным именем компонента в окне) — деградация, а не поломка. */
+function readElevatedTaskName() {
+  if (!app.isPackaged) return null;
+  try {
+    const exeDir = path.dirname(app.getPath('exe'));
+    const meta = JSON.parse(fs.readFileSync(path.join(exeDir, 'install-meta.json'), 'utf8'));
+    return meta.elevatedTaskName || null;
+  } catch (_err) {
+    return null;
+  }
+}
+
 app.whenReady().then(() => {
   if (!isProperlyInstalled()) {
     dialog.showErrorBox(
@@ -89,6 +113,7 @@ app.whenReady().then(() => {
   }
 
   installId = resolveInstallId();
+  elevatedTaskName = readElevatedTaskName();
   createWindow();
   runStartupTasks();
 });
@@ -284,6 +309,65 @@ function runSilently(exePath, args) {
 }
 
 /**
+ * То же самое, что runSilently, но через заранее зарегистрированную задачу
+ * планировщика (см. ncdai-installer/installer-logic.js -> registerElevatedTask).
+ * Если компоненту для установки нужны права — они будут получены ТИХО, без
+ * единого окна UAC с настоящим именем компонента, потому что задача уже
+ * настроена на "выполнение с наивысшими правами" при установке программы.
+ *
+ * Механизм — через файлы-задания: записываем, что нужно запустить, просим
+ * Windows выполнить саму задачу (schtasks /run — это НЕ запускает exePath
+ * напрямую, а лишь будит уже зарегистрированную задачу), и ждём файл с
+ * результатом, который напишет elevated-helper.ps1 изнутри этой задачи.
+ */
+function runElevatedJobDir() {
+  const dir = path.join(app.getPath('appData'), 'NCDAI');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+async function runSilentlyElevated(exePath, args) {
+  const jobDir = runElevatedJobDir();
+  const jobPath = path.join(jobDir, 'elevated-job.json');
+  const resultPath = path.join(jobDir, 'elevated-result.json');
+
+  if (fs.existsSync(resultPath)) fs.unlinkSync(resultPath); // не читать результат от прошлого запуска
+  fs.writeFileSync(jobPath, JSON.stringify({ exePath, args }), 'utf8');
+
+  await execFileAsync('schtasks', ['/run', '/tn', elevatedTaskName]);
+
+  // Сама задача выполняется асинхронно (Windows тут же возвращает управление,
+  // не дожидаясь её завершения) — поэтому ждём файл с результатом сами.
+  const deadline = Date.now() + 120000; // 2 минуты — с большим запасом для тяжёлых установщиков
+  while (Date.now() < deadline) {
+    if (fs.existsSync(resultPath)) {
+      const result = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+      if (!result.ok) throw new Error(result.error || 'elevated install failed');
+      if (result.exitCode !== 0) throw new Error(`Установщик завершился с кодом ${result.exitCode}`);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error('elevated install: превышено время ожидания');
+}
+
+/** Выбирает способ запуска: через задачу планировщика, если она есть
+ *  и зарегистрирована, иначе — обычный способ (может показать своё
+ *  системное окно с правами, если конкретно этому компоненту они нужны —
+ *  деградация, а не ошибка). */
+async function runSilentlyBestEffort(exePath, args) {
+  if (elevatedTaskName) {
+    try {
+      await runSilentlyElevated(exePath, args);
+      return;
+    } catch (err) {
+      console.warn('[elevated] тихая установка через задачу не удалась, пробуем обычным способом:', err.message);
+    }
+  }
+  await runSilently(exePath, args);
+}
+
+/**
  * Optional, tier-gated components — not part of the app itself, installed
  * lazily and silently once we know the user's subscription tier (after
  * login). Deliberately reuses the same update:status banner as app updates,
@@ -321,7 +405,7 @@ async function runComponentInstall() {
 
         notifyUpdateStatus({ state: 'installing', version: c.version, label: c.name });
         const args = c.silentArgs ? c.silentArgs.split(' ').filter(Boolean) : [];
-        await runSilently(destPath, args);
+        await runSilentlyBestEffort(destPath, args);
 
         installedMap[c.name] = c.version;
         store.set('installedComponents', installedMap);
