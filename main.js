@@ -321,7 +321,14 @@ function runSilently(exePath, args) {
  * результатом, который напишет elevated-helper.ps1 изнутри этой задачи.
  */
 function runElevatedJobDir() {
-  const dir = path.join(app.getPath('appData'), 'NCDAI');
+  // ВАЖНО: должно совпадать с тем, что читает elevated-helper.ps1
+  // (ncdai-installer/assets/elevated-helper.ps1 использует $env:LOCALAPPDATA,
+  // а не app.getPath('appData'), который в Electron указывает на Roaming —
+  // это разные папки Windows. Раньше тут было app.getPath('appData'), из-за
+  // чего job-файл писался не туда, где его искал helper-скрипт: задача
+  // планировщика отрабатывала, но не находила задание, и установка молча
+  // откатывалась на обычный запуск без тихого повышения прав.)
+  const dir = path.join(process.env.LOCALAPPDATA || app.getPath('appData'), 'NCDAI');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
