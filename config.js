@@ -1,9 +1,9 @@
-// Заглушки — замените на реальные значения перед релизом.
+// Placeholders — replace with real values before release.
 module.exports = {
-  // Адрес бэкенда (ncdai-backend) — телеметрия, обновления, вход и регистрация.
+  // Backend address (ncdai-backend) — telemetry, updates, login and registration.
   BACKEND_URL: 'https://ncdai-backend-production.up.railway.app',
 
-  // Веб-страница, которая грузится в окне после успешного входа.
-  // Вся реальная логика/интерфейс программы живёт здесь, на сервере.
+  // Web page loaded in the window after a successful login.
+  // All the app's real logic/UI lives here, on the server.
   APP_WEB_URL: 'https://app.ncdai.example',
 };

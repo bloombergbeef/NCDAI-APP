@@ -14,7 +14,7 @@
 
   function setLoading(loading) {
     btn.disabled = loading;
-    btnLabel.textContent = loading ? 'Вход…' : 'Войти';
+    btnLabel.textContent = loading ? 'Signing in…' : 'Sign in';
     btnSpinner.hidden = !loading;
   }
 
@@ -31,7 +31,7 @@
     // no need to do anything further here. On failure, show the error.
     if (!result.ok) {
       setLoading(false);
-      errorMsg.textContent = result.error || 'Не удалось войти. Попробуйте ещё раз.';
+      errorMsg.textContent = result.error || 'Failed to sign in. Please try again.';
     }
   });
 
@@ -58,7 +58,7 @@
 
   function setRegLoading(loading) {
     regBtn.disabled = loading;
-    regBtnLabel.textContent = loading ? 'Регистрация…' : 'Зарегистрироваться';
+    regBtnLabel.textContent = loading ? 'Signing up…' : 'Sign up';
     regBtnSpinner.hidden = !loading;
   }
 
@@ -79,7 +79,7 @@
     };
 
     if (payload.password !== payload.passwordConfirm) {
-      regError.textContent = 'Пароли не совпадают';
+      regError.textContent = 'Passwords do not match';
       return;
     }
 
@@ -88,7 +88,7 @@
     // On success, main process swaps the window content to the shell, same as login.
     if (!result.ok) {
       setRegLoading(false);
-      regError.textContent = result.error || 'Не удалось зарегистрироваться. Попробуйте ещё раз.';
+      regError.textContent = result.error || 'Failed to sign up. Please try again.';
     }
   });
 
@@ -98,11 +98,11 @@
   window.ncdai.onPingStatus(({ ok, ms }) => {
     if (!ok) {
       pingDot.className = 'ping-dot is-red';
-      pingValue.textContent = 'нет связи';
+      pingValue.textContent = 'no connection';
       return;
     }
     const level = ms <= 20 ? 'green' : ms <= 100 ? 'orange' : 'red';
     pingDot.className = `ping-dot is-${level}`;
-    pingValue.textContent = `${ms} мс`;
+    pingValue.textContent = `${ms} ms`;
   });
 })();

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:;">
@@ -14,42 +14,42 @@
 
   <div class="titlebar">
     <div class="titlebar-brand">
-      <span class="titlebar-mark">N</span>
+      <img class="titlebar-mark" src="../assets/logo-mark.png" alt="NCDAI" />
       <span class="titlebar-name">NCDAI</span>
     </div>
     <div class="titlebar-controls">
-      <span class="ping-indicator" id="ping-indicator" title="Задержка до сервера">
+      <span class="ping-indicator" id="ping-indicator" title="Internet connection quality">
         <span class="ping-dot" id="ping-dot"></span>
         <span id="ping-value">—</span>
       </span>
-      <button id="btn-min" class="tb-btn" aria-label="Свернуть">&#8211;</button>
-      <button id="btn-close" class="tb-btn tb-btn-close" aria-label="Закрыть">&#10005;</button>
+      <button id="btn-min" class="tb-btn" aria-label="Minimize">&#8211;</button>
+      <button id="btn-close" class="tb-btn tb-btn-close" aria-label="Close">&#10005;</button>
     </div>
   </div>
 
   <main class="login-wrap">
     <div class="login-card pending-card" id="pending-view">
-      <h1>Заявка отправлена</h1>
+      <h1>Application submitted</h1>
       <p class="lede" id="pending-message">
-        Ваша заявка на регистрацию передана администратору. Пожалуйста, дождитесь
-        одобрения и не закрывайте это окно — как только заявку одобрят, вы
-        автоматически попадёте в рабочее пространство.
+        Your registration request has been sent to the administrator. Please wait
+        for approval and keep this window open — as soon as your request is
+        approved, you will be taken to the workspace automatically.
       </p>
 
       <div class="pending-status" id="pending-status">
         <canvas id="pending-chart" width="132" height="30"></canvas>
-        <span>Ожидает рассмотрения…</span>
+        <span>Awaiting review…</span>
       </div>
 
       <div class="pending-rejected" id="pending-rejected" hidden>
         <p class="error">
-          К сожалению, мы не можем одобрить вашу заявку в соответствии с
-          внутренними критериями отбора компании. Вы можете подать заявку
-          повторно позже или направить дополнительную информацию о себе на
-          <a href="mailto:support@ncdai.com">support@ncdai.com</a> — мы
-          рассмотрим её отдельно.
+          Unfortunately, we are unable to approve your application based on the
+          company's internal selection criteria. You may reapply later or send
+          additional information about yourself to
+          <a href="mailto:support@ncdai.com">support@ncdai.com</a> — we will
+          review it separately.
         </p>
-        <button class="btn btn-ghost btn-block" id="btn-back-to-login">Вернуться к входу</button>
+        <button class="btn btn-ghost btn-block" id="btn-back-to-login">Back to sign in</button>
       </div>
     </div>
   </main>

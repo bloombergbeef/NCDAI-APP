@@ -1,7 +1,7 @@
-// Проверяет полный цикл регистрации: заявка -> статус "pending" -> админ
-// одобряет -> статус "approved" с токеном. Использует тот же fake-backend.js
-// и те же HTTP-эндпоинты, что и main.js в приложении (auth:register /
-// pollRegistrationStatus), просто без Electron вокруг.
+// Verifies the full registration cycle: request -> "pending" status -> admin
+// approves -> "approved" status with a token. Uses the same fake-backend.js
+// and the same HTTP endpoints as main.js in the app (auth:register /
+// pollRegistrationStatus), just without Electron around it.
 const { createFakeBackend } = require('./fake-backend');
 
 const PORT = 4001;
@@ -11,18 +11,18 @@ async function main() {
   const server = await createFakeBackend(PORT);
   console.log(`Fake backend: ${BACKEND_URL}\n`);
 
-  console.log('1) отправляем заявку на регистрацию');
+  console.log('1) submitting a registration request');
   const registerRes = await fetch(`${BACKEND_URL}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      username: 'ivanov',
+      username: 'jsmith',
       password: 'secret123',
-      lastName: 'Иванов',
-      firstName: 'Иван',
-      email: 'ivanov@company.ru',
-      phone: '+7 900 000-00-00',
-      company: 'ООО Ромашка',
+      lastName: 'Smith',
+      firstName: 'John',
+      email: 'jsmith@company.com',
+      phone: '+1 555 000-0000',
+      company: 'Acme LLC',
       experience: 'mid',
     }),
   });
@@ -30,11 +30,11 @@ async function main() {
   console.log('  ', registerData);
   const registrationId = registerData.registrationId;
 
-  console.log('\n2) опрашиваем статус — админ ещё не смотрел заявку');
+  console.log('\n2) polling the status — the admin hasn\'t looked at the request yet');
   let status = await (await fetch(`${BACKEND_URL}/api/auth/registration-status/${registrationId}`)).json();
-  console.log('  ', status, '(приложение в этот момент показывает экран ожидания)');
+  console.log('  ', status, '(at this point the app shows the waiting screen)');
 
-  console.log('\n3) админ заходит в раздел "Заявки" и жмёт "Одобрить" с тарифом pro');
+  console.log('\n3) the admin opens the "Requests" section and clicks "Approve" with the pro tier');
   const approveRes = await fetch(`${BACKEND_URL}/api/admin/registrations/${registrationId}/approve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -42,15 +42,15 @@ async function main() {
   });
   console.log('   approve ->', await approveRes.json());
 
-  console.log('\n4) следующий опрос статуса приложением — теперь approved');
+  console.log('\n4) the app\'s next status poll — now approved');
   status = await (await fetch(`${BACKEND_URL}/api/auth/registration-status/${registrationId}`)).json();
-  console.log('  ', status, '\n   (приложение получает token+tier и сразу открывает рабочее пространство)');
+  console.log('  ', status, '\n   (the app receives token+tier and immediately opens the workspace)');
 
   server.close();
-  console.log('\nВсё отработало ✓');
+  console.log('\nAll checks passed ✓');
 }
 
 main().catch((err) => {
-  console.error('Проверка не прошла:', err);
+  console.error('Check failed:', err);
   process.exit(1);
 });

@@ -32,9 +32,8 @@ html, body {
 }
 .titlebar-brand { display: flex; align-items: center; gap: 8px; }
 .titlebar-mark {
-  width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
-  background: var(--accent); color: #0a0b0d; font-family: var(--font-mono);
-  font-weight: 600; font-size: 11px; border-radius: 2px;
+  width: 18px; height: 18px; display: block; object-fit: cover;
+  border-radius: 4px; flex-shrink: 0;
 }
 .titlebar-name { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); }
 .titlebar-controls { display: flex; align-items: center; -webkit-app-region: no-drag; }

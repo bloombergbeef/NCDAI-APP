@@ -1,11 +1,11 @@
-// Мини-бэкенд на чистом Node http (без npm-пакетов) — повторяет контракт
-// ncdai-backend ровно настолько, чтобы прогнать через него настоящие
-// ../lib/telemetry.js и ../lib/updater.js без Electron и без реального сервера.
-// Запуск: node test/run-integration-check.js
+// A minimal backend using plain Node http (no npm packages) — replicates the
+// ncdai-backend contract just enough to run the real ../lib/telemetry.js and
+// ../lib/updater.js through it without Electron and without a real server.
+// Run: node test/run-integration-check.js
 const http = require('http');
 const url = require('url');
 
-const releaseFile = Buffer.from('демо-содержимое обновления\n'.repeat(200));
+const releaseFile = Buffer.from('demo update content\n'.repeat(200));
 const registrations = new Map();
 let nextRegId = 1;
 
@@ -30,7 +30,7 @@ function createFakeBackend(port = 4000) {
                 available: true,
                 version: '1.1.0',
                 mandatory: false,
-                notes: 'Тестовое демо-обновление',
+                notes: 'Test demo update',
                 fileSize: releaseFile.length,
                 downloadUrl: `http://localhost:${port}/api/updates/download/1`,
               }
@@ -42,7 +42,7 @@ function createFakeBackend(port = 4000) {
         res.end(releaseFile);
       } else if (pathname === '/api/components/check' && req.method === 'GET') {
         const tierQualifies = query.tier === 'pro' || query.tier === 'enterprise';
-        const explicitlyGranted = query.installId === 'granted-free-user'; // симулирует ручной грант в админке
+        const explicitlyGranted = query.installId === 'granted-free-user'; // simulates a manual grant in the admin panel
         const payload =
           tierQualifies || explicitlyGranted
             ? {
@@ -51,7 +51,7 @@ function createFakeBackend(port = 4000) {
                     id: 1,
                     name: 'advanced-engine',
                     version: '1.0.0',
-                    notes: 'Тестовый компонент только для pro/enterprise (или вручную разрешённых пользователей)',
+                    notes: 'Test component for pro/enterprise only (or manually allowed users)',
                     silentArgs: '/quiet /norestart',
                     fileSize: releaseFile.length,
                     downloadUrl: `http://localhost:${port}/api/components/download/1`,
@@ -68,7 +68,7 @@ function createFakeBackend(port = 4000) {
         const data = JSON.parse(body || '{}');
         if (!data.username || !data.password || !data.lastName || !data.firstName || !data.email) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Заполните все обязательные поля' }));
+          res.end(JSON.stringify({ error: 'Please fill in all required fields' }));
           return;
         }
         const id = nextRegId++;
@@ -80,7 +80,7 @@ function createFakeBackend(port = 4000) {
         const reg = registrations.get(id);
         if (!reg) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Заявка не найдена' }));
+          res.end(JSON.stringify({ error: 'Request not found' }));
           return;
         }
         if (reg.status === 'approved') {

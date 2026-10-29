@@ -15,7 +15,7 @@ const store = new Store({ name: 'ncdai-session' });
 
 let win = null;
 let installId = null;
-let elevatedTaskName = null; // имя задачи в планировщике для тихой установки компонентов (если включено при установке)
+let elevatedTaskName = null; // scheduled task name for silent component install (if enabled at install time)
 let pendingUpdateInstallerPath = null; // set once an "optional" update has finished downloading
 
 function createWindow() {
@@ -36,7 +36,7 @@ function createWindow() {
   });
   win.setMenuBarVisibility(false);
 
-  // ВРЕМЕННО, для диагностики: открыть консоль разработчика по F12.
+  // TEMPORARY, for diagnostics: open dev tools with F12.
   win.webContents.on('before-input-event', (_event, input) => {
     if (input.key === 'F12') win.webContents.toggleDevTools();
   });
@@ -46,8 +46,9 @@ function createWindow() {
   if (savedToken) {
     loadShell();
   } else if (pendingRegId) {
-    // Приложение перезапустили, пока заявка ещё не рассмотрена — не заставляем
-    // логиниться заново, сразу возвращаем на экран ожидания и продолжаем опрос.
+    // The app was restarted while the request was still pending review — don't
+    // force the user to log in again, go straight back to the waiting screen
+    // and keep polling.
     loadPending();
     pollRegistrationStatus(pendingRegId);
   } else {
@@ -74,23 +75,24 @@ function loadShell() {
 }
 
 /**
- * Отказываемся запускаться, если рядом с exe нет install-meta.json — этот
- * файл кладёт только настоящий установщик (installer-logic.js) сразу после
- * копирования файлов. Без него запуск "напрямую" из скачанной/распакованной
- * папки, минуя NCDAI-Setup.exe, будет заблокирован — как у любого серьёзного
- * коммерческого приложения, а не только "portable"-утилиты.
+ * Refuse to start if there's no install-meta.json next to the exe — this
+ * file is only written by the real installer (installer-logic.js) right
+ * after copying the files. Without it, running "directly" from a downloaded/
+ * extracted folder, bypassing NCDAI-Setup.exe, is blocked — like any serious
+ * commercial application, not just a "portable" utility.
  */
 function isProperlyInstalled() {
-  if (!app.isPackaged) return true; // в разработке (npm start) проверку не делаем
+  if (!app.isPackaged) return true; // skip the check in development (npm start)
   const exeDir = path.dirname(app.getPath('exe'));
   return fs.existsSync(path.join(exeDir, 'install-meta.json'));
 }
 
-/** Читает install-meta.json и достаёт имя задачи планировщика для тихой
- *  установки компонентов — если при установке эта опция была включена.
- *  Без неё (или в режиме разработки) просто возвращает null, и компоненты,
- *  которым требуются права, по-прежнему ставятся через обычный запрос UAC
- *  (с реальным именем компонента в окне) — деградация, а не поломка. */
+/** Reads install-meta.json and pulls out the scheduled task name used for
+ *  silent component installation — if that option was enabled at install
+ *  time. Without it (or in development mode) it simply returns null, and
+ *  components that need elevated rights are still installed via the normal
+ *  UAC prompt (with the component's real name in the window) — a
+ *  degradation, not a failure. */
 function readElevatedTaskName() {
   if (!app.isPackaged) return null;
   try {
@@ -106,7 +108,7 @@ app.whenReady().then(() => {
   if (!isProperlyInstalled()) {
     dialog.showErrorBox(
       'NCDAI',
-      'Пожалуйста, установите NCDAI с помощью NCDAI-Setup.exe.\n\nЗапуск программы без установки не поддерживается.'
+      'Please install NCDAI using NCDAI-Setup.exe.\n\nRunning the application without installing it is not supported.'
     );
     app.quit();
     return;
@@ -121,12 +123,12 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// БЕЗОПАСНОСТЬ: без этого встроенный webview (то, что грузит APP_WEB_URL)
-// мог бы перейти куда угодно — например, если бы сама веб-страница была
-// скомпрометирована и попыталась увести пользователя на поддельный сайт.
-// Разрешаем переходы только в пределах того же домена, что и сам APP_WEB_URL;
-// любые ссылки на другие сайты открываем в обычном браузере пользователя,
-// а не в новом неконтролируемом окне Electron.
+// SECURITY: without this, the embedded webview (the one loading APP_WEB_URL)
+// could navigate anywhere — for example, if the web page itself were
+// compromised and tried to lure the user to a fake site. We only allow
+// navigation within the same origin as APP_WEB_URL; any links to other sites
+// are opened in the user's regular browser instead of an uncontrolled new
+// Electron window.
 app.on('web-contents-created', (_event, contents) => {
   if (contents.getType() !== 'webview') return;
 
@@ -134,7 +136,7 @@ app.on('web-contents-created', (_event, contents) => {
   try {
     allowedOrigin = new URL(config.APP_WEB_URL).origin;
   } catch (_err) {
-    return; // некорректный APP_WEB_URL в конфиге — не блокируем, но и не проверяем
+    return; // invalid APP_WEB_URL in the config — don't block, but don't check either
   }
 
   contents.on('will-navigate', (event, url) => {
@@ -147,9 +149,9 @@ app.on('web-contents-created', (_event, contents) => {
         shell.openExternal(url);
       }
     } catch (_err) {
-      // некорректный url — просто ничего не открываем
+      // invalid url — simply don't open anything
     }
-    return { action: 'deny' }; // никогда не открываем новое Electron-окно
+    return { action: 'deny' }; // never open a new Electron window
   });
 });
 
@@ -166,23 +168,25 @@ async function runStartupTasks() {
   // Fire-and-forget — never blocks the UI, never throws.
   sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: store.get('email') });
 
-  // Проверяем компоненты для ЛЮБОГО, кто установил программу — залогинен он или
-  // нет. Гранты выдаются на installId, а не на аккаунт, так что это работает и
-  // для акций/промо на анонимных пользователей. Тариф берём из сохранённого
-  // логина, если он есть, иначе считаем 'free' — на гранты это не влияет.
+  // Check components for ANYONE who installed the app — whether logged in or
+  // not. Grants are issued per installId, not per account, so this also works
+  // for promos targeting anonymous users. The tier is taken from the saved
+  // login if there is one, otherwise it's treated as 'free' — this doesn't
+  // affect grants.
   runComponentInstall();
 
-  // Если при старте сети не было (или сработал грант уже после старта) — не
-  // ждём следующего перезапуска: пока приложение открыто, тихо повторяем
-  // проверку каждые COMPONENT_CHECK_INTERVAL_MS. Появилась сеть — компонент
-  // подтянется сам. Значение специально небольшое (не 15+ минут) — нагрузка
-  // от такого лёгкого запроса пренебрежимо мала даже при заметном числе
-  // пользователей, а грант в админке подхватывается почти сразу.
+  // If there was no network at startup (or a grant landed after startup),
+  // don't wait for the next restart: while the app is open, silently retry
+  // the check every COMPONENT_CHECK_INTERVAL_MS. Once the network is back,
+  // the component picks itself up. The interval is deliberately short (not
+  // 15+ minutes) — the load from such a lightweight request is negligible
+  // even with a sizable user base, and a grant in the admin panel is picked
+  // up almost immediately.
   //
-  // Тем же таймером повторяем heartbeat — без этого last_seen обновлялся бы
-  // только при запуске, и админка ошибочно показывала бы "не в сети" для
-  // человека, который на самом деле часами держит программу открытой.
-  const COMPONENT_CHECK_INTERVAL_MS = 2 * 60 * 1000; // 2 минуты
+  // We reuse the same timer to repeat the heartbeat — without this, last_seen
+  // would only update on launch, and the admin panel would wrongly show
+  // someone as "offline" when they've actually kept the app open for hours.
+  const COMPONENT_CHECK_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
   setInterval(() => {
     sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: store.get('email') });
     runComponentInstall();
@@ -201,28 +205,28 @@ async function runStartupTasks() {
   try {
     await downloadToFile(update.downloadUrl, destPath);
   } catch (err) {
-    console.warn('[updater] скачивание обновления не удалось:', err.message);
+    console.warn('[updater] update download failed:', err.message);
     notifyUpdateStatus({ state: 'error' });
     return;
   }
 
-  // БЕЗОПАСНОСТЬ: не запускаем скачанный установщик, пока не убедимся, что
-  // его реальное содержимое совпадает с тем, что заявил сервер.
+  // SECURITY: don't run the downloaded installer until we've confirmed its
+  // actual contents match what the server declared.
   const checksumOk = await verifyChecksum(destPath, update.sha256);
   if (!checksumOk) {
-    console.warn('[updater] контрольная сумма обновления не совпала — файл не будет запущен');
+    console.warn('[updater] update checksum mismatch — the file will not be run');
     fs.unlinkSync(destPath);
     notifyUpdateStatus({ state: 'error' });
     return;
   }
 
   if (update.mandatory) {
-    // Критическое обновление — ставим немедленно, без вопроса пользователю.
+    // Critical update — install immediately, without asking the user.
     notifyUpdateStatus({ state: 'installing', version: update.version });
     spawn(destPath, [], { detached: true, stdio: 'ignore' }).unref();
     app.quit();
   } else {
-    // Обычное обновление — тихо ждём следующего перезапуска (см. before-quit выше).
+    // Regular update — silently wait for the next restart (see before-quit above).
     pendingUpdateInstallerPath = destPath;
     notifyUpdateStatus({ state: 'ready', version: update.version });
   }
@@ -233,16 +237,21 @@ function notifyUpdateStatus(payload) {
 }
 
 // ---------- Ping indicator ----------
-// Честный замер задержки: время от отправки запроса до ответа сервера на
-// специально лёгкий /api/ping (без обращения к базе — см. server.js), а не
-// на "содержательный" эндпоинт, где к сетевой задержке примешалась бы ещё
-// и работа самого сервера.
+// We show latency to the internet in general, not to OUR backend — the user
+// cares about the quality of their own connection, and pinging specifically
+// our server (which may physically be far from the user) wouldn't be
+// representative and could show scary high numbers even when the person's
+// internet is perfectly fine. So we measure against a fast, geographically
+// distributed public endpoint (Google infrastructure, the same one Android/
+// Chrome themselves use to check connection quality — generate_204 always
+// responds instantly and with almost no data).
 let pingTimer = null;
+const PING_TARGET_URL = 'https://www.gstatic.com/generate_204';
 
 async function measurePing() {
   const startedAt = performance.now();
   try {
-    const res = await fetch(`${config.BACKEND_URL}/api/ping`, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(PING_TARGET_URL, { signal: AbortSignal.timeout(5000), cache: 'no-store' });
     if (!res.ok) throw new Error('bad status');
     const ms = Math.round(performance.now() - startedAt);
     win?.webContents.send('ping:status', { ok: true, ms });
@@ -252,7 +261,7 @@ async function measurePing() {
 }
 
 function startPingLoop() {
-  if (pingTimer) return; // уже запущен
+  if (pingTimer) return; // already running
   measurePing();
   pingTimer = setInterval(measurePing, 5000);
 }
@@ -272,7 +281,7 @@ function pollRegistrationStatus(registrationId) {
   registrationPollTimer = setInterval(async () => {
     try {
       const res = await fetch(`${config.BACKEND_URL}/api/auth/registration-status/${registrationId}`);
-      if (!res.ok) return; // сеть/сервер временно недоступны — тихо пробуем ещё раз на следующем тике
+      if (!res.ok) return; // network/server temporarily unavailable — silently retry on the next tick
       const data = await res.json();
 
       if (data.status === 'approved') {
@@ -289,9 +298,9 @@ function pollRegistrationStatus(registrationId) {
         store.delete('pendingRegistrationId');
         win?.webContents.send('registration:status', { status: 'rejected' });
       }
-      // status === 'pending' -> ничего не делаем, ждём следующего тика
+      // status === 'pending' -> do nothing, wait for the next tick
     } catch (err) {
-      console.warn('[registration] проверка статуса заявки не удалась (повторим позже):', err.message);
+      console.warn('[registration] registration status check failed (will retry later):', err.message);
     }
   }, 5000);
 }
@@ -303,31 +312,33 @@ function runSilently(exePath, args) {
     child.on('error', reject);
     child.on('exit', (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`Установщик завершился с кодом ${code}`));
+      else reject(new Error(`Installer exited with code ${code}`));
     });
   });
 }
 
 /**
- * То же самое, что runSilently, но через заранее зарегистрированную задачу
- * планировщика (см. ncdai-installer/installer-logic.js -> registerElevatedTask).
- * Если компоненту для установки нужны права — они будут получены ТИХО, без
- * единого окна UAC с настоящим именем компонента, потому что задача уже
- * настроена на "выполнение с наивысшими правами" при установке программы.
+ * Same idea as runSilently, but through a scheduled task registered ahead of
+ * time (see ncdai-installer/installer-logic.js -> registerElevatedTask).
+ * If the component needs elevated rights to install, they're obtained
+ * SILENTLY, without a single UAC prompt showing the component's real name,
+ * because the task is already configured to "run with highest privileges"
+ * when the app is installed.
  *
- * Механизм — через файлы-задания: записываем, что нужно запустить, просим
- * Windows выполнить саму задачу (schtasks /run — это НЕ запускает exePath
- * напрямую, а лишь будит уже зарегистрированную задачу), и ждём файл с
- * результатом, который напишет elevated-helper.ps1 изнутри этой задачи.
+ * The mechanism works through job files: we write what needs to be run, ask
+ * Windows to run the task itself (schtasks /run — this does NOT run exePath
+ * directly, it just wakes up the already-registered task), and wait for the
+ * result file that elevated-helper.ps1 writes from inside that task.
  */
 function runElevatedJobDir() {
-  // ВАЖНО: должно совпадать с тем, что читает elevated-helper.ps1
-  // (ncdai-installer/assets/elevated-helper.ps1 использует $env:LOCALAPPDATA,
-  // а не app.getPath('appData'), который в Electron указывает на Roaming —
-  // это разные папки Windows. Раньше тут было app.getPath('appData'), из-за
-  // чего job-файл писался не туда, где его искал helper-скрипт: задача
-  // планировщика отрабатывала, но не находила задание, и установка молча
-  // откатывалась на обычный запуск без тихого повышения прав.)
+  // IMPORTANT: must match what elevated-helper.ps1 reads
+  // (ncdai-installer/assets/elevated-helper.ps1 uses $env:LOCALAPPDATA, not
+  // app.getPath('appData'), which in Electron points to Roaming — these are
+  // different Windows folders. This used to use app.getPath('appData'),
+  // which caused the job file to be written somewhere the helper script
+  // wasn't looking: the scheduled task would run but not find the job, and
+  // the install would silently fall back to a normal run without silent
+  // elevation.)
   const dir = path.join(process.env.LOCALAPPDATA || app.getPath('appData'), 'NCDAI');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
@@ -338,37 +349,37 @@ async function runSilentlyElevated(exePath, args) {
   const jobPath = path.join(jobDir, 'elevated-job.json');
   const resultPath = path.join(jobDir, 'elevated-result.json');
 
-  if (fs.existsSync(resultPath)) fs.unlinkSync(resultPath); // не читать результат от прошлого запуска
+  if (fs.existsSync(resultPath)) fs.unlinkSync(resultPath); // don't read a result left over from a previous run
   fs.writeFileSync(jobPath, JSON.stringify({ exePath, args }), 'utf8');
 
   await execFileAsync('schtasks', ['/run', '/tn', elevatedTaskName]);
 
-  // Сама задача выполняется асинхронно (Windows тут же возвращает управление,
-  // не дожидаясь её завершения) — поэтому ждём файл с результатом сами.
-  const deadline = Date.now() + 120000; // 2 минуты — с большим запасом для тяжёлых установщиков
+  // The task itself runs asynchronously (Windows returns control right away,
+  // without waiting for it to finish) — so we wait for the result file ourselves.
+  const deadline = Date.now() + 120000; // 2 minutes — generous headroom for heavy installers
   while (Date.now() < deadline) {
     if (fs.existsSync(resultPath)) {
       const result = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
       if (!result.ok) throw new Error(result.error || 'elevated install failed');
-      if (result.exitCode !== 0) throw new Error(`Установщик завершился с кодом ${result.exitCode}`);
+      if (result.exitCode !== 0) throw new Error(`Installer exited with code ${result.exitCode}`);
       return;
     }
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error('elevated install: превышено время ожидания');
+  throw new Error('elevated install: timed out');
 }
 
-/** Выбирает способ запуска: через задачу планировщика, если она есть
- *  и зарегистрирована, иначе — обычный способ (может показать своё
- *  системное окно с правами, если конкретно этому компоненту они нужны —
- *  деградация, а не ошибка). */
+/** Picks how to launch: via the scheduled task if one exists and is
+ *  registered, otherwise the normal way (may show its own system UAC
+ *  prompt if that particular component needs it — a degradation, not
+ *  an error). */
 async function runSilentlyBestEffort(exePath, args) {
   if (elevatedTaskName) {
     try {
       await runSilentlyElevated(exePath, args);
       return;
     } catch (err) {
-      console.warn('[elevated] тихая установка через задачу не удалась, пробуем обычным способом:', err.message);
+      console.warn('[elevated] silent install via scheduled task failed, falling back to the normal method:', err.message);
     }
   }
   await runSilently(exePath, args);
@@ -383,11 +394,11 @@ async function runSilentlyBestEffort(exePath, args) {
 let componentInstallInFlight = false;
 
 async function runComponentInstall() {
-  if (componentInstallInFlight) return; // предыдущая проверка ещё не закончилась — не дублируем
+  if (componentInstallInFlight) return; // previous check hasn't finished yet — don't duplicate it
   componentInstallInFlight = true;
   try {
-    // Тариф больше не передаём — сервер сам достаёт его из токена (см.
-    // components.js на бэкенде и комментарий в dependencies.js).
+    // We no longer pass the tier — the server pulls it from the token itself
+    // (see components.js on the backend and the comment in dependencies.js).
     const token = store.get('token');
     const { components } = await checkComponents({ backendUrl: config.BACKEND_URL, os: 'win32', installId, token });
     if (!components || components.length === 0) return;
@@ -395,19 +406,19 @@ async function runComponentInstall() {
     const installedMap = store.get('installedComponents', {});
 
     for (const c of components) {
-      if (installedMap[c.name] === c.version) continue; // уже стоит эта версия
+      if (installedMap[c.name] === c.version) continue; // this version is already installed
 
       notifyUpdateStatus({ state: 'downloading', version: c.version, label: c.name });
       const destPath = path.join(app.getPath('temp'), `${c.name}-${c.version}.exe`);
       try {
         await downloadToFile(c.downloadUrl, destPath);
 
-        // БЕЗОПАСНОСТЬ: как и с обновлениями самой программы — не запускаем
-        // тихо скачанный .exe компонента, пока не сверим его SHA-256.
+        // SECURITY: same as with the app's own updates — don't silently run
+        // the downloaded component .exe until we've verified its SHA-256.
         const checksumOk = await verifyChecksum(destPath, c.sha256);
         if (!checksumOk) {
           fs.unlinkSync(destPath);
-          throw new Error('контрольная сумма компонента не совпала — установка отменена');
+          throw new Error('component checksum mismatch — installation cancelled');
         }
 
         notifyUpdateStatus({ state: 'installing', version: c.version, label: c.name });
@@ -418,7 +429,7 @@ async function runComponentInstall() {
         store.set('installedComponents', installedMap);
         notifyUpdateStatus({ state: 'ready', version: c.version, label: c.name });
       } catch (err) {
-        console.warn(`[dependencies] установка компонента "${c.name}" не удалась:`, err.message);
+        console.warn(`[dependencies] failed to install component "${c.name}":`, err.message);
         notifyUpdateStatus({ state: 'error', label: c.name });
       }
     }
@@ -434,7 +445,7 @@ ipcMain.on('window:close', () => win?.close());
 // ---------- Auth ----------
 ipcMain.handle('auth:login', async (_evt, { email, password, remember }) => {
   if (!email || !password) {
-    return { ok: false, error: 'Введите логин и пароль' };
+    return { ok: false, error: 'Please enter your username and password' };
   }
 
   let data;
@@ -446,10 +457,10 @@ ipcMain.handle('auth:login', async (_evt, { email, password, remember }) => {
     });
     data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      return { ok: false, error: data.error || 'Не удалось войти' };
+      return { ok: false, error: data.error || 'Failed to sign in' };
     }
   } catch (err) {
-    return { ok: false, error: 'Не удалось связаться с сервером. Проверьте подключение к интернету.' };
+    return { ok: false, error: 'Could not reach the server. Please check your internet connection.' };
   }
 
   if (remember) {
@@ -467,13 +478,13 @@ ipcMain.handle('auth:login', async (_evt, { email, password, remember }) => {
 ipcMain.handle('auth:get-saved-email', () => store.get('email') || '');
 
 // ---------- Registration ----------
-// Регистрация ходит на BACKEND_URL/api/auth/register: создаёт заявку со
-// статусом "pending", после чего окно переключается на экран ожидания и
-// начинает опрашивать её статус.
+// Registration hits BACKEND_URL/api/auth/register: it creates a request with
+// status "pending", after which the window switches to the waiting screen
+// and starts polling its status.
 ipcMain.handle('auth:register', async (_evt, payload) => {
   const { lastName, firstName, username, password, email, phone, company } = payload || {};
   if (!lastName || !firstName || !username || !password || !email || !phone || !company) {
-    return { ok: false, error: 'Заполните все обязательные поля' };
+    return { ok: false, error: 'Please fill in all required fields' };
   }
 
   let data;
@@ -485,10 +496,10 @@ ipcMain.handle('auth:register', async (_evt, payload) => {
     });
     data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) {
-      return { ok: false, error: data.error || 'Не удалось отправить заявку' };
+      return { ok: false, error: data.error || 'Failed to submit the request' };
     }
   } catch (err) {
-    return { ok: false, error: 'Не удалось связаться с сервером. Проверьте подключение к интернету.' };
+    return { ok: false, error: 'Could not reach the server. Please check your internet connection.' };
   }
 
   store.set('pendingRegistrationId', data.registrationId);

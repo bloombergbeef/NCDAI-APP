@@ -13,7 +13,7 @@
   webview.addEventListener('did-fail-load', (e) => {
     // ignore aborted loads (e.g. about:blank) — real failures still show the loader
     if (e.errorCode === -3) return;
-    loading.querySelector('p').textContent = 'Не удалось загрузить NCDAI. Проверьте подключение к интернету.';
+    loading.querySelector('p').textContent = 'Failed to load NCDAI. Please check your internet connection.';
   });
 
   window.ncdai.getAppUrl().then((url) => {
@@ -23,11 +23,11 @@
   const banner = document.getElementById('update-banner');
   const bannerText = document.getElementById('update-banner-text');
   const messages = {
-    downloading: (v, label) => (label ? `Загружается ${label} ${v}…` : `Скачивается обновление до версии ${v}…`),
+    downloading: (v, label) => (label ? `Downloading ${label} ${v}…` : `Downloading update to version ${v}…`),
     installing: (v, label) =>
-      label ? `Устанавливается ${label} ${v}…` : `Устанавливается обновление ${v}, приложение сейчас перезапустится…`,
-    ready: (v, label) => (label ? `${label} ${v} установлен` : `Обновление ${v} готово — применится при следующем перезапуске`),
-    error: () => 'Не удалось выполнить обновление',
+      label ? `Installing ${label} ${v}…` : `Installing update ${v}, the app will restart shortly…`,
+    ready: (v, label) => (label ? `${label} ${v} installed` : `Update ${v} ready — it will be applied on the next restart`),
+    error: () => 'Failed to apply update',
   };
   window.ncdai.onUpdateStatus(({ state, version, label }) => {
     banner.hidden = false;
@@ -36,17 +36,17 @@
   });
 
   // ---------- Ping ----------
-  // Зелёный — до 20 мс, оранжевый — до 100 мс, красный — выше (или нет связи).
+  // Green — up to 20 ms, orange — up to 100 ms, red — higher (or no connection).
   const pingDot = document.getElementById('ping-dot');
   const pingValue = document.getElementById('ping-value');
   window.ncdai.onPingStatus(({ ok, ms }) => {
     if (!ok) {
       pingDot.className = 'ping-dot is-red';
-      pingValue.textContent = 'нет связи';
+      pingValue.textContent = 'no connection';
       return;
     }
     const level = ms <= 20 ? 'green' : ms <= 100 ? 'orange' : 'red';
     pingDot.className = `ping-dot is-${level}`;
-    pingValue.textContent = `${ms} мс`;
+    pingValue.textContent = `${ms} ms`;
   });
 })();

@@ -1,190 +1,204 @@
-# NCDAI — клиентское приложение (логин + webview)
+# NCDAI — client application (login + webview)
 
-Тонкий Electron-клиент: экран логина → сохранение токена → окно с веб-страницей
-(вся реальная логика программы — на сервере, здесь только «рамка»).
+A thin Electron client: login screen → token storage → window with a web page
+(all the app's real logic lives on the server, this is just the "frame").
 
-## Структура
+## Structure
 
 ```
 ncdai-app/
-├── main.js              # окна, IPC, заглушка авторизации, хранение токена
-├── preload-login.js      # мост для экрана логина
-├── preload-shell.js      # мост для окна с webview
-├── config.js             # ЗАГЛУШКИ: LOGIN_API_URL и APP_WEB_URL — замените на реальные
+├── main.js              # windows, IPC, auth stub, token storage
+├── preload-login.js      # bridge for the login screen
+├── preload-shell.js      # bridge for the webview window
+├── config.js             # PLACEHOLDERS: LOGIN_API_URL and APP_WEB_URL — replace with real values
 ├── renderer/
-│   ├── login/             # экран входа (email/пароль, "запомнить меня")
-│   └── shell/              # окно после входа: <webview> с вашей веб-страницей
+│   ├── login/             # sign-in screen (email/password, "remember me")
+│   └── shell/              # window after login: <webview> with your web page
 └── package.json
 ```
 
-## Что уже работает
+## What already works
 
-- Экран логина в том же чёрно-амберном стиле, что и инсталлятор — с ссылкой
-  «Зарегистрироваться», переключающей на экран регистрации без открытия нового окна.
-- **Экран регистрации** собирает: фамилию, имя, желаемый логин, пароль (с
-  подтверждением), email, телефон, название компании и опыт в сфере (выпадающий
-  список: «Только начинаю» → «Более 5 лет»). Валидация обязательных полей и
-  совпадения паролей — на клиенте (`login.js`).
-- **Регистрация реально ходит на бэкенд**, это не заглушка: `main.js` шлёт
-  `POST {BACKEND_URL}/api/auth/register`, получает `registrationId`, переключает
-  окно на экран ожидания (`renderer/login/pending.html` — «не закрывайте окно») и
-  каждые 5 секунд опрашивает `GET /api/auth/registration-status/:id`
-  (`pollRegistrationStatus()` в `main.js`).
-  - Статус `approved` → приложение получает токен и тариф, сохраняет их и
-    **автоматически** переключается в рабочее пространство — без единого
-    действия пользователя.
-  - Статус `rejected` → экран ожидания показывает отказ и кнопку «Вернуться к входу».
-  - Если приложение закрыли и открыли заново, пока заявка ещё не рассмотрена —
-    оно само возвращается на экран ожидания и продолжает опрос (`pendingRegistrationId`
-    в `electron-store`), а не заставляет регистрироваться заново.
-- Одобряется заявка на вкладке **«Заявки»** в админ-панели бэкенда — там же
-  выбирается тариф, который получит новый пользователь.
-- Авторизация — **заглушка** (`main.js` → `ipcMain.handle('auth:login', ...)`):
-  принимает любой непустой логин/пароль, отдаёт фейковый токен. Место, куда
-  подставить реальный запрос к вашему API, размечено комментарием `TODO`.
-- Токен и email сохраняются через `electron-store` в `%APPDATA%\ncdai-app\ncdai-session.json`
-  (если отмечено «запомнить меня») — при следующем запуске логин пропускается.
-- После входа окно переключается на `renderer/shell/shell.html`, где `<webview>`
-  грузит `config.APP_WEB_URL` (сейчас `https://app.ncdai.example` — placeholder).
-- Кнопка «Выйти» очищает токен и возвращает на экран логина.
+- A login screen in the same black-and-amber style as the installer — with a
+  "Sign up" link that switches to the registration screen without opening a new window.
+- **The registration screen** collects: last name, first name, desired username,
+  password (with confirmation), email, phone, company name, and experience in
+  the field (a dropdown: "Just starting out" → "More than 5 years"). Required
+  field validation and password matching happen on the client (`login.js`).
+- **Registration actually talks to the backend** — it isn't a stub: `main.js`
+  sends `POST {BACKEND_URL}/api/auth/register`, receives a `registrationId`,
+  switches the window to the waiting screen (`renderer/login/pending.html` —
+  "don't close this window") and polls `GET /api/auth/registration-status/:id`
+  every 5 seconds (`pollRegistrationStatus()` in `main.js`).
+  - `approved` status → the app receives a token and tier, saves them, and
+    **automatically** switches to the workspace — with no action required
+    from the user.
+  - `rejected` status → the waiting screen shows the rejection and a
+    "Back to sign in" button.
+  - If the app is closed and reopened while the request is still pending, it
+    returns to the waiting screen on its own and keeps polling
+    (`pendingRegistrationId` in `electron-store`), instead of forcing the
+    user to register again.
+- A request is approved from the **"Requests"** tab in the backend admin
+  panel — that's also where you pick the tier the new user will get.
+- Authentication is a **stub** (`main.js` → `ipcMain.handle('auth:login', ...)`):
+  it accepts any non-empty username/password and returns a fake token. The
+  spot to plug in a real request to your API is marked with a `TODO` comment.
+- The token and email are saved via `electron-store` in
+  `%APPDATA%\ncdai-app\ncdai-session.json` (if "remember me" is checked) —
+  login is skipped on the next launch.
+- After login, the window switches to `renderer/shell/shell.html`, where the
+  `<webview>` loads `config.APP_WEB_URL` (currently `https://app.ncdai.example`
+  — a placeholder).
+- The "Log out" button clears the token and returns to the login screen.
 
-## Связь с бэкендом (`ncdai-backend`) — уже подключена
+## Connection to the backend (`ncdai-backend`) — already wired up
 
-Это не заглушка — `lib/telemetry.js` и `lib/updater.js` реально ходят по HTTP:
+This isn't a stub — `lib/telemetry.js` and `lib/updater.js` make real HTTP calls:
 
-- **`lib/install-id.js`** — при старте читает `install-meta.json`, который
-  `ncdai-installer` кладёт рядом с `NCDAI.exe` (там лежит `installId`,
-  сгенерированный во время установки). Если файла нет (например, `npm start`
-  в разработке) — генерирует и сохраняет свой через `electron-store`, чтобы
-  повторные dev-запуски были стабильны.
-- **`lib/telemetry.js`** — `sendHeartbeat()` дергается при каждом запуске
-  (`main.js` → `runStartupTasks()`). Само install-событие шлёт **инсталлятор**
-  (`ncdai-installer/installer-logic.js`), а не это приложение — он единственный,
-  кто точно знает, что установка только что произошла.
-- **`lib/updater.js`** — `checkForUpdate()` при каждом старте спрашивает
-  `GET /api/updates/check`. Если есть обновление:
-  - `mandatory: true` → скачивает и сразу запускает установщик, закрывая
-    текущее приложение (`app.quit()` в `main.js`).
-  - `mandatory: false` → тихо скачивает и откладывает установку до момента,
-    когда пользователь сам закроет приложение (`app.on('before-quit')`).
-  - В `renderer/shell/` есть тонкий баннер сверху окна, отражающий это
-    состояние («Скачивается…» / «Готово — применится при перезапуске»).
+- **`lib/install-id.js`** — on startup, reads `install-meta.json`, which
+  `ncdai-installer` places next to `NCDAI.exe` (it holds the `installId`
+  generated at install time). If the file doesn't exist (e.g. `npm start` in
+  development), it generates and saves its own via `electron-store`, so
+  repeated dev runs stay stable.
+- **`lib/telemetry.js`** — `sendHeartbeat()` fires on every launch
+  (`main.js` → `runStartupTasks()`). The install event itself is sent by the
+  **installer** (`ncdai-installer/installer-logic.js`), not this app — it's
+  the only one that knows for sure that an install just happened.
+- **`lib/updater.js`** — `checkForUpdate()` asks `GET /api/updates/check` on
+  every launch. If an update is available:
+  - `mandatory: true` → downloads and immediately runs the installer,
+    closing the current app (`app.quit()` in `main.js`).
+  - `mandatory: false` → silently downloads and defers installation until
+    the user closes the app themselves (`app.on('before-quit')`).
+  - `renderer/shell/` has a thin banner at the top of the window reflecting
+    this state ("Downloading…" / "Ready — will be applied on restart").
 
-**Как проверить это без Electron и без поднятого бэкенда** — маленький
-фейковый HTTP-сервер (только встроенный `http`, без зависимостей), который
-повторяет контракт `ncdai-backend`, и прогоняет через него ровно те же файлы
-`lib/telemetry.js` и `lib/updater.js`, что использует само приложение:
+**How to test this without Electron and without a running backend** — a
+small fake HTTP server (using only the built-in `http`, no dependencies)
+that replicates the `ncdai-backend` contract, and runs the exact same
+`lib/telemetry.js` and `lib/updater.js` files the app itself uses:
 
 ```bash
 node test/run-integration-check.js
 ```
 
-Выведет весь цикл: install-событие → heartbeat → проверка обновления →
-скачивание файла — по-настоящему, через HTTP, тем же кодом.
+This prints out the whole cycle: install event → heartbeat → update check →
+file download — for real, over HTTP, using the same code.
 
-Отдельно — цикл регистрации (заявка → ожидание → одобрение админом → токен):
+Separately — the registration cycle (request → waiting → admin approval → token):
 
 ```bash
 node test/run-registration-check.js
 ```
 
-## Тихая установка «тарифных» компонентов (`lib/dependencies.js`)
+## Silent installation of "tiered" components (`lib/dependencies.js`)
 
-Отдельно от обновления самой программы — компоненты, которые нужны не всем
-пользователям, а только тем, у кого подписка не ниже определённого тарифа
-(например, `pro`). Их специально не включают в основную сборку — ставятся
-лениво, прямо в приложении, силами того же паттерна «скачать → тихо
-поставить», что и апдейты.
+Separate from updating the app itself — components that aren't needed by
+every user, only by those whose subscription is at or above a certain tier
+(e.g. `pro`). They're deliberately excluded from the main build — installed
+lazily, right inside the app, using the same "download → install silently"
+pattern as updates.
 
-**Как это работает:**
-1. При каждом запуске приложения (`runStartupTasks()`) — **независимо от того, залогинен
-   пользователь или нет** — вызывается `runComponentInstall(tier)`, где `tier` берётся из
-   сохранённого логина, если он есть, иначе считается `'free'`. Гранты выдаются на
-   `installId`, а не на аккаунт, поэтому промо-доступ для анонимных/пока не залогиненных
-   пользователей тоже работает — грант в админке достаточно поставить на нужный `installId`
-   из списка «Пользователи», логин для этого не обязателен.
-2. Если при старте не было сети — проверка просто ничего не найдёт и тихо завершится
-   (без ошибок, без ретраев в моменте). Но пока приложение открыто, каждые 15 минут
-   запускается повторная проверка (`setInterval` в `main.js`) — как только появится
-   сеть, компонент подтянется сам, без перезапуска приложения.
-3. После логина (`ipcMain.handle('auth:login', ...)`) — дополнительная немедленная
-   проверка с актуальным тарифом, чтобы не ждать следующего цикла, если пользователь
-   только что оформил подписку.
-4. `lib/dependencies.js` спрашивает у бэкенда `GET /api/components/check?tier=...&installId=...` —
-   какие компоненты доступны (по тарифу ИЛИ по ручному гранту).
-5. Для каждого недостающего (сверяется с локально сохранённым списком в
-   `electron-store`) — скачивает `.exe`/установщик и запускает его с тихими
-   флагами (`silentArgs` из ответа бэкенда, например `/quiet /norestart`),
-   дожидаясь кода выхода `0`.
-6. **В интерфейсе пользователя это выглядит как обычное обновление** — тот же
-   баннер в `renderer/shell/` (виден после входа). Если установка компонента
-   идёт ещё до логина (анонимный/промо-сценарий) — она полностью тихая, без
-   какого-либо индикатора на экране входа: показывать там баннер об
-   обновлении может запутать человека, будто от него что-то требуется.
+**How it works:**
+1. On every app launch (`runStartupTasks()`) — **regardless of whether the
+   user is logged in or not** — `runComponentInstall(tier)` is called, where
+   `tier` is taken from the saved login if there is one, otherwise it's
+   treated as `'free'`. Grants are issued per `installId`, not per account,
+   so promotional access for anonymous/not-yet-logged-in users also works —
+   it's enough to set a grant in the admin panel on the right `installId`
+   from the "Users" list; logging in isn't required.
+2. If there was no network at startup, the check simply finds nothing and
+   quietly finishes (no errors, no immediate retries). But while the app is
+   open, a recheck runs every 15 minutes (`setInterval` in `main.js`) — as
+   soon as the network comes back, the component picks itself up, with no
+   app restart needed.
+3. After login (`ipcMain.handle('auth:login', ...)`) — an extra immediate
+   check runs with the current tier, so there's no need to wait for the next
+   cycle if the user just subscribed.
+4. `lib/dependencies.js` asks the backend
+   `GET /api/components/check?tier=...&installId=...` which components are
+   available (by tier OR by a manual grant).
+5. For each missing one (checked against the locally saved list in
+   `electron-store`) — it downloads the `.exe`/installer and runs it with
+   silent flags (`silentArgs` from the backend's response, e.g.
+   `/quiet /norestart`), waiting for exit code `0`.
+6. **From the user's point of view this looks like a normal update** — the
+   same banner in `renderer/shell/` (visible after login). If a component
+   installs before login (the anonymous/promo scenario), it's entirely
+   silent, with no indicator at all on the login screen — showing an update
+   banner there could confuse someone into thinking something is required
+   of them.
 
-Тестируется тем же `node test/run-integration-check.js` — там есть шаги 5–7,
-проверяющие, что тариф `free` не видит компонент, а `pro` — видит и качает.
+Tested with the same `node test/run-integration-check.js` — it includes
+steps 5–7, which verify that the `free` tier doesn't see the component while
+`pro` does, and downloads it.
 
-**Важно для продакшена:** аргументы тихой установки (`/quiet`, `/S`, `/qn` и
-т.д.) зависят от того, чем собран конкретный компонент (MSI/NSIS/InnoSetup) —
-задаются в админ-панели бэкенда per-компонент, ничего хардкодить в приложении
-не нужно. Если компонент требует прав администратора — silent-запуск всё
-равно вызовет UAC-запрос, это ожидаемо и не решается на уровне кода клиента.
+**Important for production:** the silent-install arguments (`/quiet`, `/S`,
+`/qn`, etc.) depend on what the specific component was built with
+(MSI/NSIS/InnoSetup) — these are set per-component in the backend admin
+panel, nothing needs to be hardcoded in the app. If a component requires
+administrator rights, the silent run will still trigger a UAC prompt — this
+is expected and isn't something the client code can work around.
 
-**Не забудьте про production-детали**, которых пока нет:
-- Проверка контрольной суммы/подписи скачанного `.exe` перед запуском —
-  сейчас `lib/updater.js` этого не делает (см. комментарий `NOTE` в файле).
-- `config.BACKEND_URL` указывает на `http://localhost:4000` — замените на
-  реальный адрес бэкенда.
+**Don't forget these production details**, which aren't in place yet:
+- Checksum/signature verification of the downloaded `.exe` before running
+  it — `lib/updater.js` doesn't currently do this (see the `NOTE` comment in
+  the file).
+- `config.BACKEND_URL` points at `http://localhost:4000` — replace it with
+  the real backend address.
 
-## Запуск
+## Running it
 
 ```bash
 npm install
 npm start
 ```
 
-При первом запуске откроется экран логина — введите что угодно, чтобы проверить
-переход на экран webview (там будет ошибка загрузки, пока `APP_WEB_URL` не указывает
-на реальный адрес — это ожидаемо).
+On first launch, the login screen opens — enter anything to check the
+transition to the webview screen (it will show a load error until
+`APP_WEB_URL` points to a real address — this is expected).
 
-## Сборка финального .exe
+## Building the final .exe
 
-**Вариант А — автоматически, без своей машины.** В проекте уже лежит
-`.github/workflows/build.yml`. Залейте папку в репозиторий на GitHub и
-запушьте в `main` — сборка запустится на настоящем Windows-раннере GitHub,
-готовый `NCDAI.exe` появится во вкладке **Actions → (последний прогон) →
-Artifacts** через несколько минут. Можно также запустить вручную кнопкой
-«Run workflow».
+**Option A — automatically, without your own machine.** The project already
+has `.github/workflows/build.yml`. Push the folder to a GitHub repository and
+push to `main` — the build will run on a real GitHub Windows runner, and the
+finished `NCDAI.exe` will appear under **Actions → (latest run) → Artifacts**
+within a few minutes. You can also trigger it manually with the "Run
+workflow" button.
 
-**Вариант Б — на своей Windows-машине:**
+**Option B — on your own Windows machine:**
 ```bash
 npm run dist
 ```
-Соберёт `dist/NCDAI.exe` — скопируйте его в
-`ncdai-installer/resources/app-payload/NCDAI.exe` (имя файла важно, инсталлятор
-ищет ровно его), чтобы инсталлятор разворачивал настоящее приложение, а не
-пустышку для демо.
+This builds `dist/NCDAI.exe` — copy it to
+`ncdai-installer/resources/app-payload/NCDAI.exe` (the filename matters, the
+installer looks for exactly that one), so the installer deploys the real app
+instead of the demo placeholder.
 
-## Что подставить перед релизом
+## What to fill in before release
 
-1. **`config.js`** — `BACKEND_URL` (реальный адрес `ncdai-backend`), `LOGIN_API_URL`
-   и `APP_WEB_URL`.
-2. **`main.js`** — заменить блок `ipcMain.handle('auth:login', ...)` на реальный запрос
-   к вашему API (регистрация уже реальная — см. `ipcMain.handle('auth:register', ...)`,
-   ходит на `BACKEND_URL/api/auth/register`, ничего доделывать не нужно).
-3. **`lib/updater.js`** — добавить проверку контрольной суммы/подписи перед запуском
-   скачанного установщика (бэкенд пока не отдаёт `sha512` — добавьте поле в
-   `releases` и сверяйте здесь).
-4. **`build/icon.ico`** — сейчас та же иконка-заглушка, что и у инсталлятора.
-5. После сборки (`npm run dist`) готовый `NCDAI.exe` кладётся в
-   `ncdai-installer/resources/app-payload/` — именно его инсталлятор разворачивает
-   пользователю и кладёт рядом `install-meta.json` с `installId`.
+1. **`config.js`** — `BACKEND_URL` (the real `ncdai-backend` address),
+   `LOGIN_API_URL` and `APP_WEB_URL`.
+2. **`main.js`** — replace the `ipcMain.handle('auth:login', ...)` block with
+   a real request to your API (registration is already real — see
+   `ipcMain.handle('auth:register', ...)`, which hits
+   `BACKEND_URL/api/auth/register` — nothing left to do there).
+3. **`lib/updater.js`** — add checksum/signature verification before running
+   the downloaded installer (the backend doesn't send `sha512` yet — add the
+   field to `releases` and verify it here).
+4. **`build/icon.ico`** — currently the same placeholder icon as the installer.
+5. After building (`npm run dist`), the finished `NCDAI.exe` goes into
+   `ncdai-installer/resources/app-payload/` — this is exactly the file the
+   installer deploys to the user, alongside the `install-meta.json` it writes
+   with the `installId`.
 
-## Что дальше
+## What's next
 
-Основная связка (инсталлятор → приложение → бэкенд → админка) уже вся на месте
-и реально работает. Дальше — по вкусу: довести до продакшена (реальные
-LOGIN_API_URL/APP_WEB_URL, проверка подписи апдейтов, HTTPS для бэкенда),
-либо добавить что-то новое поверх (например, автоматическую отправку
-`/api/telemetry/uninstall` из `Uninstall.bat`, который уже пишет инсталлятор).
+The main pipeline (installer → app → backend → admin panel) is all in place
+and actually works. From here it's a matter of taste: polish it for
+production (real LOGIN_API_URL/APP_WEB_URL, update signature verification,
+HTTPS for the backend), or add something new on top of it (for example,
+automatically sending `/api/telemetry/uninstall` from the `Uninstall.bat`
+that the installer already writes).

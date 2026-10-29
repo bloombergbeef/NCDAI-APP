@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:;">
@@ -13,76 +13,76 @@
 
   <div class="titlebar">
     <div class="titlebar-brand">
-      <span class="titlebar-mark">N</span>
+      <img class="titlebar-mark" src="../assets/logo-mark.png" alt="NCDAI" />
       <span class="titlebar-name">NCDAI</span>
     </div>
     <div class="titlebar-controls">
-      <span class="ping-indicator" id="ping-indicator" title="Задержка до сервера">
+      <span class="ping-indicator" id="ping-indicator" title="Internet connection quality">
         <span class="ping-dot" id="ping-dot"></span>
         <span id="ping-value">—</span>
       </span>
-      <button id="btn-min" class="tb-btn" aria-label="Свернуть">&#8211;</button>
-      <button id="btn-close" class="tb-btn tb-btn-close" aria-label="Закрыть">&#10005;</button>
+      <button id="btn-min" class="tb-btn" aria-label="Minimize">&#8211;</button>
+      <button id="btn-close" class="tb-btn tb-btn-close" aria-label="Close">&#10005;</button>
     </div>
   </div>
 
   <main class="login-wrap">
     <form class="login-card" id="login-form">
-      <h1>Вход в NCDAI</h1>
-      <p class="lede">Введите данные вашей учётной записи</p>
+      <h1>Sign in to NCDAI</h1>
+      <p class="lede">Enter your account details</p>
 
       <label class="field">
-        <span>Логин или email</span>
+        <span>Username or email</span>
         <input type="text" id="email" autocomplete="username" required />
       </label>
 
       <label class="field">
-        <span>Пароль</span>
+        <span>Password</span>
         <input type="password" id="password" autocomplete="current-password" required />
       </label>
 
       <label class="checkbox">
         <input type="checkbox" id="remember" checked />
-        <span>Запомнить меня на этом устройстве</span>
+        <span>Remember me on this device</span>
       </label>
 
       <p class="error" id="error-msg"></p>
 
       <button type="submit" class="btn btn-primary btn-block" id="btn-login">
-        <span class="btn-label">Войти</span>
+        <span class="btn-label">Sign in</span>
         <span class="btn-spinner" hidden></span>
       </button>
 
-      <p class="switch-link">Нет аккаунта? <a href="#" id="link-to-register">Зарегистрироваться</a></p>
+      <p class="switch-link">Don't have an account? <a href="#" id="link-to-register">Sign up</a></p>
     </form>
 
     <form class="login-card register-card" id="register-form" hidden>
-      <h1>Регистрация в NCDAI</h1>
-      <p class="lede">Заполните данные, чтобы создать аккаунт</p>
+      <h1>Create an NCDAI account</h1>
+      <p class="lede">Fill in your details to create an account</p>
 
       <div class="field-row">
         <label class="field">
-          <span>Фамилия</span>
+          <span>Last name</span>
           <input type="text" id="reg-lastname" autocomplete="family-name" required />
         </label>
         <label class="field">
-          <span>Имя</span>
+          <span>First name</span>
           <input type="text" id="reg-firstname" autocomplete="given-name" required />
         </label>
       </div>
 
       <label class="field">
-        <span>Желаемый логин</span>
+        <span>Desired username</span>
         <input type="text" id="reg-username" autocomplete="username" required />
       </label>
 
       <div class="field-row">
         <label class="field">
-          <span>Пароль</span>
+          <span>Password</span>
           <input type="password" id="reg-password" autocomplete="new-password" required />
         </label>
         <label class="field">
-          <span>Повторите пароль</span>
+          <span>Confirm password</span>
           <input type="password" id="reg-password-confirm" autocomplete="new-password" required />
         </label>
       </div>
@@ -94,35 +94,35 @@
 
       <div class="field-row">
         <label class="field">
-          <span>Телефон</span>
-          <input type="tel" id="reg-phone" autocomplete="tel" placeholder="+7 900 000-00-00" required />
+          <span>Phone</span>
+          <input type="tel" id="reg-phone" autocomplete="tel" placeholder="+1 555 000-0000" required />
         </label>
         <label class="field">
-          <span>Название компании</span>
+          <span>Company name</span>
           <input type="text" id="reg-company" autocomplete="organization" required />
         </label>
       </div>
 
       <label class="field">
-        <span>Ваш опыт в этой сфере</span>
+        <span>Your experience in this field</span>
         <select id="reg-experience">
-          <option value="" selected disabled>Выберите вариант</option>
-          <option value="none">Только начинаю</option>
-          <option value="junior">Менее 1 года</option>
-          <option value="mid">1–3 года</option>
-          <option value="senior">3–5 лет</option>
-          <option value="expert">Более 5 лет</option>
+          <option value="" selected disabled>Choose an option</option>
+          <option value="none">Just starting out</option>
+          <option value="junior">Less than 1 year</option>
+          <option value="mid">1-3 years</option>
+          <option value="senior">3-5 years</option>
+          <option value="expert">More than 5 years</option>
         </select>
       </label>
 
       <p class="error" id="register-error"></p>
 
       <button type="submit" class="btn btn-primary btn-block" id="btn-register">
-        <span class="btn-label">Зарегистрироваться</span>
+        <span class="btn-label">Sign up</span>
         <span class="btn-spinner" hidden></span>
       </button>
 
-      <p class="switch-link">Уже есть аккаунт? <a href="#" id="link-to-login">Войти</a></p>
+      <p class="switch-link">Already have an account? <a href="#" id="link-to-login">Sign in</a></p>
     </form>
   </main>
 
