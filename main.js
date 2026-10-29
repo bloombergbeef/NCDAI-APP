@@ -6,7 +6,7 @@ const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
 const Store = require('electron-store');
 const config = require('./config');
-const { resolveInstallId } = require('./lib/install-id');
+const { resolveInstallId, resolveOsInfo } = require('./lib/install-id');
 const { sendHeartbeat } = require('./lib/telemetry');
 const { checkForUpdate, downloadToFile, verifyChecksum } = require('./lib/updater');
 const { checkComponents } = require('./lib/dependencies');
@@ -15,6 +15,7 @@ const store = new Store({ name: 'ncdai-session' });
 
 let win = null;
 let installId = null;
+let osInfo = { osVersion: 'unknown', osLabel: 'Unknown Windows version' }; // set once installId is resolved, see createWindow()
 let elevatedTaskName = null; // scheduled task name for silent component install (if enabled at install time)
 let pendingUpdateInstallerPath = null; // set once an "optional" update has finished downloading
 
@@ -115,6 +116,7 @@ app.whenReady().then(() => {
   }
 
   installId = resolveInstallId();
+  osInfo = resolveOsInfo();
   elevatedTaskName = readElevatedTaskName();
   createWindow();
   runStartupTasks();
@@ -166,7 +168,7 @@ app.on('before-quit', () => {
 
 async function runStartupTasks() {
   // Fire-and-forget — never blocks the UI, never throws.
-  sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: store.get('email') });
+  sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: store.get('email'), osVersion: osInfo.osVersion, osLabel: osInfo.osLabel });
 
   // Check components for ANYONE who installed the app — whether logged in or
   // not. Grants are issued per installId, not per account, so this also works
@@ -188,7 +190,7 @@ async function runStartupTasks() {
   // someone as "offline" when they've actually kept the app open for hours.
   const COMPONENT_CHECK_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
   setInterval(() => {
-    sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: store.get('email') });
+    sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: store.get('email'), osVersion: osInfo.osVersion, osLabel: osInfo.osLabel });
     runComponentInstall();
   }, COMPONENT_CHECK_INTERVAL_MS);
 
@@ -291,7 +293,7 @@ function pollRegistrationStatus(registrationId) {
         store.set('email', data.email);
         store.set('tier', data.tier);
         loadShell();
-        sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: data.email });
+        sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: data.email, osVersion: osInfo.osVersion, osLabel: osInfo.osLabel });
         runComponentInstall();
       } else if (data.status === 'rejected') {
         stopRegistrationPolling();
@@ -470,7 +472,7 @@ ipcMain.handle('auth:login', async (_evt, { email, password, remember }) => {
   }
 
   loadShell();
-  sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: data.email });
+  sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: data.email, osVersion: osInfo.osVersion, osLabel: osInfo.osLabel });
   runComponentInstall();
   return { ok: true };
 });
