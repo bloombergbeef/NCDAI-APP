@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, Tray, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
@@ -14,18 +14,53 @@ const { checkComponents } = require('./lib/dependencies');
 const store = new Store({ name: 'ncdai-session' });
 
 let win = null;
+let tray = null;
+let isQuitting = false; // true only on the real quit path (tray "Exit"); distinguishes that from the user clicking the titlebar X, which should just hide the window
 let installId = null;
 let osInfo = { osVersion: 'unknown', osLabel: 'Unknown Windows version' }; // set once installId is resolved, see createWindow()
 let elevatedTaskName = null; // scheduled task name for silent component install (if enabled at install time)
 let pendingUpdateInstallerPath = null; // set once an "optional" update has finished downloading
 
+// Only one NCDAI process may run at a time. Without this, clicking the
+// desktop shortcut while the app is already hidden in the tray would launch
+// a second, fully independent process (its own window, its own webview,
+// another multi-minute workspace load) instead of just bringing the
+// existing one back — exactly the duplicate-process problem single-instance
+// lock exists to prevent, same as any VPN client or chat app.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  // Another instance is already running and now owns the lock — this one
+  // has nothing to do but hand off to it (see 'second-instance' below) and exit.
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // Fired in the FIRST (already running) process when a second launch
+    // attempt happens — e.g. the user double-clicked the desktop icon again
+    // while NCDAI was sitting in the tray. Just surface the existing window;
+    // its webview never unloaded, so this is instant, not another 5-minute load.
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  });
+}
+
 function createWindow() {
+  // Start hidden when Windows auto-launched us at login (autostart option
+  // from the installer) — nobody wants a window popping up on every boot.
+  // getLoginItemSettings() reports this based on how THIS process was
+  // actually launched (parent process), regardless of how the Run key got
+  // there, so it works even though the installer writes it via reg.exe
+  // rather than Electron's own setLoginItemSettings API.
+  const startHidden = app.getLoginItemSettings().wasOpenedAtLogin;
+
   win = new BrowserWindow({
     width: 1040,
     height: 800,
     minWidth: 760,
     minHeight: 600,
     frame: false,
+    show: !startHidden,
     backgroundColor: '#0a0b0d',
     icon: path.join(__dirname, 'build', 'icon.ico'),
     webPreferences: {
@@ -33,9 +68,28 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       webviewTag: true,
+      // Keep timers/heartbeats/the workspace's own live data running at full
+      // speed while the window is hidden in the tray — Chromium throttles
+      // them by default for backgrounded windows, which would stall the
+      // very thing we're trying to keep warm in the background.
+      backgroundThrottling: false,
     },
   });
   win.setMenuBarVisibility(false);
+
+  // Clicking the titlebar X hides the window instead of closing it — the
+  // webview (and whatever it already loaded) stays alive in memory, so
+  // bringing it back via the tray icon is instant instead of another
+  // multi-minute load. The only way to actually quit is the tray's "Exit"
+  // item, which sets isQuitting = true first.
+  win.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      win.hide();
+    }
+  });
+
+  createTray();
 
   // TEMPORARY, for diagnostics: open dev tools with F12.
   win.webContents.on('before-input-event', (_event, input) => {
@@ -55,6 +109,48 @@ function createWindow() {
   } else {
     loadLogin();
   }
+}
+
+/**
+ * The tray icon is what makes "hide instead of close" usable: it's the only
+ * remaining way to bring the window back or actually quit once it's hidden.
+ * Created once, right after the window, and lives for the whole app session.
+ */
+function createTray() {
+  if (tray) return; // already created (defensive — createWindow only runs once anyway)
+
+  tray = new Tray(path.join(__dirname, 'build', 'icon.ico'));
+  tray.setToolTip('NCDAI');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    {
+      label: 'Open NCDAI',
+      click: () => {
+        if (!win) return;
+        win.show();
+        win.focus();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Exit',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]));
+
+  // Left-click on the icon (Windows default) toggles the window, same as
+  // most tray-resident apps.
+  tray.on('click', () => {
+    if (!win) return;
+    if (win.isVisible()) {
+      win.hide();
+    } else {
+      win.show();
+      win.focus();
+    }
+  });
 }
 
 function loadLogin() {
@@ -224,8 +320,13 @@ async function runStartupTasks() {
 
   if (update.mandatory) {
     // Critical update — install immediately, without asking the user.
+    // isQuitting must be set first: otherwise our own 'close' handler would
+    // intercept this app.quit() and just hide the window to the tray
+    // instead of actually exiting, leaving the old version still running
+    // alongside the installer we just launched.
     notifyUpdateStatus({ state: 'installing', version: update.version });
     spawn(destPath, [], { detached: true, stdio: 'ignore' }).unref();
+    isQuitting = true;
     app.quit();
   } else {
     // Regular update — silently wait for the next restart (see before-quit above).
