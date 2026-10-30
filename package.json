@@ -23,7 +23,7 @@
     "productName": "NCDAI",
     "asar": true,
     "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["main.js", "preload-login.js", "preload-shell.js", "config.js", "lib/**/*", "renderer/**/*", "package.json"],
+    "files": ["main.js", "preload-login.js", "preload-shell.js", "config.js", "lib/**/*", "renderer/**/*", "build/icon.ico", "package.json"],
     "win": {
       "target": [{ "target": "zip", "arch": ["x64"] }],
       "icon": "build/icon.ico"

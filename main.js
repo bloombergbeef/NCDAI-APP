@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, Tray, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, Tray, Menu, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
@@ -12,6 +12,16 @@ const { checkForUpdate, downloadToFile, verifyChecksum } = require('./lib/update
 const { checkComponents } = require('./lib/dependencies');
 
 const store = new Store({ name: 'ncdai-session' });
+
+// Works around a known Electron/Chromium issue where a frameless window
+// (frame: false, like ours) renders as a solid black rectangle on some
+// GPU/driver combinations — happens on real physical machines too, not
+// just VMs, usually with older/integrated GPU drivers. Because our
+// titlebar (including the close button) is drawn in HTML by us rather
+// than by Windows, a black render also makes the window look un-closeable:
+// the X is there in the DOM, it just isn't being painted. Disabling GPU
+// compositing trades a little rendering performance for reliability here.
+app.disableHardwareAcceleration();
 
 let win = null;
 let tray = null;
@@ -77,13 +87,26 @@ function createWindow() {
   });
   win.setMenuBarVisibility(false);
 
+  // Emergency exit, independent of our own HTML-drawn titlebar/close button.
+  // If the window ever renders black (GPU/driver glitch) the close button
+  // is invisible and unclickable even though it exists in the DOM — this
+  // gives the user a way out that doesn't depend on anything being painted
+  // on screen, without needing Task Manager.
+  globalShortcut.register('Control+Shift+Q', () => {
+    isQuitting = true;
+    app.quit();
+  });
+
   // Clicking the titlebar X hides the window instead of closing it — the
   // webview (and whatever it already loaded) stays alive in memory, so
   // bringing it back via the tray icon is instant instead of another
   // multi-minute load. The only way to actually quit is the tray's "Exit"
   // item, which sets isQuitting = true first.
   win.on('close', (event) => {
-    if (!isQuitting) {
+    // Only hide-to-tray if there's actually a tray icon to bring it back
+    // from — otherwise (tray creation failed) fall back to a real close, so
+    // the user is never left with a vanished window and no way to reopen it.
+    if (!isQuitting && tray) {
       event.preventDefault();
       win.hide();
     }
@@ -119,7 +142,18 @@ function createWindow() {
 function createTray() {
   if (tray) return; // already created (defensive — createWindow only runs once anyway)
 
-  tray = new Tray(path.join(__dirname, 'build', 'icon.ico'));
+  // Defensive: if this ever throws (e.g. a future packaging change drops
+  // build/icon.ico from the bundle again), don't let it take the whole
+  // startup down with it — "close hides the window with no tray to bring it
+  // back" is a much worse failure mode than "no tray icon, but the app and
+  // its normal window still work".
+  try {
+    tray = new Tray(path.join(__dirname, 'build', 'icon.ico'));
+  } catch (err) {
+    console.warn('Failed to create the tray icon (not critical, the window itself still works):', err.message);
+    return;
+  }
+
   tray.setToolTip('NCDAI');
   tray.setContextMenu(Menu.buildFromTemplate([
     {
@@ -260,6 +294,7 @@ app.on('before-quit', () => {
   if (pendingUpdateInstallerPath) {
     spawn(pendingUpdateInstallerPath, [], { detached: true, stdio: 'ignore' }).unref();
   }
+  globalShortcut.unregisterAll();
 });
 
 async function runStartupTasks() {
