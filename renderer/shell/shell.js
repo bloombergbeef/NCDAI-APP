@@ -16,6 +16,24 @@
     loading.querySelector('p').textContent = 'Failed to load NCDAI. Please check your internet connection.';
   });
 
+  // Safety net: if the workspace's own renderer process dies while the
+  // window was hidden in the tray (crash, out-of-memory, killed by Windows),
+  // bring the window back to a black/frozen webview with no obvious way to
+  // recover other than restarting the whole app. Reload it automatically
+  // instead — the host window and tray icon were never affected, only this
+  // one guest page.
+  function recoverWebview() {
+    webview.style.display = 'none';
+    loading.style.display = ''; // falls back to the CSS default (flex) — spinner shows again
+    loading.querySelector('p').textContent = 'Restoring NCDAI…';
+    webview.reload();
+  }
+  webview.addEventListener('crashed', recoverWebview); // older Electron
+  webview.addEventListener('render-process-gone', (e) => {
+    // 'clean-exit' happens on an intentional reload/navigation — nothing to recover from
+    if (e.reason && e.reason !== 'clean-exit') recoverWebview();
+  });
+
   window.ncdai.getAppUrl().then((url) => {
     webview.src = url;
   });
