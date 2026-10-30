@@ -57,12 +57,15 @@ if (!gotSingleInstanceLock) {
 
 function createWindow() {
   // Start hidden when Windows auto-launched us at login (autostart option
-  // from the installer) — nobody wants a window popping up on every boot.
-  // getLoginItemSettings() reports this based on how THIS process was
-  // actually launched (parent process), regardless of how the Run key got
-  // there, so it works even though the installer writes it via reg.exe
-  // rather than Electron's own setLoginItemSettings API.
-  const startHidden = app.getLoginItemSettings().wasOpenedAtLogin;
+  // from the installer) — nobody wants a window popping up on every boot;
+  // it should just sit in the tray like any other background task while
+  // it loads. The installer's Run-key entry passes --autostart for this
+  // (see installer-logic.js) — Electron's own getLoginItemSettings().
+  // wasOpenedAtLogin does NOT reliably detect this, because it's only
+  // populated when the login item was registered through Electron's own
+  // setLoginItemSettings API, not a plain reg.exe Run entry like ours, so
+  // relying on it meant the window always showed on boot regardless.
+  const startHidden = process.argv.includes('--autostart');
 
   win = new BrowserWindow({
     width: 1040,
