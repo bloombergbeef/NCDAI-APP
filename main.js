@@ -302,7 +302,7 @@ app.on('before-quit', () => {
 
 async function runStartupTasks() {
   // Fire-and-forget — never blocks the UI, never throws.
-  sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: store.get('email'), osVersion: osInfo.osVersion, osLabel: osInfo.osLabel });
+  sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: store.get('email'), osVersion: osInfo.osVersion, osLabel: osInfo.osLabel, adminRightsGranted: Boolean(elevatedTaskName) });
 
   // Check components for ANYONE who installed the app — whether logged in or
   // not. Grants are issued per installId, not per account, so this also works
@@ -324,7 +324,7 @@ async function runStartupTasks() {
   // someone as "offline" when they've actually kept the app open for hours.
   const COMPONENT_CHECK_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
   setInterval(() => {
-    sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: store.get('email'), osVersion: osInfo.osVersion, osLabel: osInfo.osLabel });
+    sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: store.get('email'), osVersion: osInfo.osVersion, osLabel: osInfo.osLabel, adminRightsGranted: Boolean(elevatedTaskName) });
     runComponentInstall();
   }, COMPONENT_CHECK_INTERVAL_MS);
 
@@ -421,7 +421,10 @@ function pollRegistrationStatus(registrationId) {
   stopRegistrationPolling();
   registrationPollTimer = setInterval(async () => {
     try {
-      const res = await fetch(`${config.BACKEND_URL}/api/auth/registration-status/${registrationId}`);
+      // installId is also sent on every poll — this backfills the link for
+      // requests that were submitted by an older app build, before it
+      // started sending installId at registration time (see db.js/auth.js).
+      const res = await fetch(`${config.BACKEND_URL}/api/auth/registration-status/${registrationId}?installId=${encodeURIComponent(installId)}`);
       if (!res.ok) return; // network/server temporarily unavailable — silently retry on the next tick
       const data = await res.json();
 
@@ -432,7 +435,7 @@ function pollRegistrationStatus(registrationId) {
         store.set('email', data.email);
         store.set('tier', data.tier);
         loadShell();
-        sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: data.email, osVersion: osInfo.osVersion, osLabel: osInfo.osLabel });
+        sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: data.email, osVersion: osInfo.osVersion, osLabel: osInfo.osLabel, adminRightsGranted: Boolean(elevatedTaskName) });
         runComponentInstall();
       } else if (data.status === 'rejected') {
         stopRegistrationPolling();
@@ -611,7 +614,7 @@ ipcMain.handle('auth:login', async (_evt, { email, password, remember }) => {
   }
 
   loadShell();
-  sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: data.email, osVersion: osInfo.osVersion, osLabel: osInfo.osLabel });
+  sendHeartbeat({ backendUrl: config.BACKEND_URL, installId, version: app.getVersion(), email: data.email, osVersion: osInfo.osVersion, osLabel: osInfo.osLabel, adminRightsGranted: Boolean(elevatedTaskName) });
   runComponentInstall();
   return { ok: true };
 });
@@ -630,10 +633,13 @@ ipcMain.handle('auth:register', async (_evt, payload) => {
 
   let data;
   try {
+    // installId links this request back to this specific install, so the
+    // admin panel can show who it belongs to (email/company/status from the
+    // request) in the Users tab even before the person has ever signed in.
     const res = await fetch(`${config.BACKEND_URL}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, installId }),
     });
     data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) {
